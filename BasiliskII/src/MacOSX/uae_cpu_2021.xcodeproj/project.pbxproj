@@ -369,14 +369,26 @@
 					"USE_XCODE=1",
 				);
 				HEADER_SEARCH_PATHS = (
-					/usr/local/include,
-					../CrossPlatform,
-					../include,
-					../MacOSX,
-					../uae_cpu_2021,
-					../Unix,
+					/Users/user2/Documents/macemu/BasiliskII/src/CrossPlatform,
+					/Users/user2/Documents/macemu/BasiliskII/src/include,
+					/Users/user2/Documents/macemu/BasiliskII/src/MacOSX,
+					/Users/user2/Documents/macemu/BasiliskII/src/MacOSX/SDL2.framework/Headers,
+					/Users/user2/Documents/macemu/BasiliskII/src/uae_cpu_2021,
+					/Users/user2/Documents/macemu/BasiliskII/src/Unix,
+					/opt/homebrew/opt/mpfr/include,
+					/opt/homebrew/opt/gmp/include,
+					/opt/homebrew/opt/sdl2/include/SDL2,
 				);
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/mpfr/lib,
+					/opt/homebrew/opt/gmp/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_CFLAGS = "-fwrapv";
+				OTHER_LDFLAGS = (
+					"-lmpfr",
+					"-lgmp",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				VALID_ARCHS = arm64;
 			};
@@ -389,14 +401,26 @@
 				EXECUTABLE_PREFIX = lib;
 				GCC_PREPROCESSOR_DEFINITIONS = "USE_XCODE=1";
 				HEADER_SEARCH_PATHS = (
-					/usr/local/include,
-					../CrossPlatform,
-					../include,
-					../MacOSX,
-					../uae_cpu_2021,
-					../Unix,
+					/Users/user2/Documents/macemu/BasiliskII/src/CrossPlatform,
+					/Users/user2/Documents/macemu/BasiliskII/src/include,
+					/Users/user2/Documents/macemu/BasiliskII/src/MacOSX,
+					/Users/user2/Documents/macemu/BasiliskII/src/MacOSX/SDL2.framework/Headers,
+					/Users/user2/Documents/macemu/BasiliskII/src/uae_cpu_2021,
+					/Users/user2/Documents/macemu/BasiliskII/src/Unix,
+					/opt/homebrew/opt/mpfr/include,
+					/opt/homebrew/opt/gmp/include,
+					/opt/homebrew/opt/sdl2/include/SDL2,
 				);
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/opt/mpfr/lib,
+					/opt/homebrew/opt/gmp/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				OTHER_CFLAGS = "-fwrapv";
+				OTHER_LDFLAGS = (
+					"-lmpfr",
+					"-lgmp",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				VALID_ARCHS = arm64;
 			};

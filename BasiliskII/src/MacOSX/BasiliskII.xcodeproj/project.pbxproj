@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F908C9C3059F012006579CE /* libSDL2-2.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */; };
 		520A1619300564A5005DCC43 /* BasiliskII.icon in Resources */ = {isa = PBXBuildFile; fileRef = 520A1618300564A5005DCC43 /* BasiliskII.icon */; };
 		5D5C3B0A24B2DF3500CDAB41 /* bincue.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5D5C3B0924B2DF3400CDAB41 /* bincue.cpp */; };
 		752F26F91F240E51001032B4 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 752F26F81F240E51001032B4 /* Foundation.framework */; };
@@ -75,10 +76,8 @@
 		E413D93220D260BC00E437D8 /* if.c in Sources */ = {isa = PBXBuildFile; fileRef = E413D91E20D260BC00E437D8 /* if.c */; };
 		E413D93320D260BC00E437D8 /* cksum.c in Sources */ = {isa = PBXBuildFile; fileRef = E413D91F20D260BC00E437D8 /* cksum.c */; };
 		E413D93420D260BC00E437D8 /* tcp_output.c in Sources */ = {isa = PBXBuildFile; fileRef = E413D92020D260BC00E437D8 /* tcp_output.c */; };
-		E413D93620D260DA00E437D8 /* SDL2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E413D93520D260DA00E437D8 /* SDL2.framework */; };
 		E413D93820D2613500E437D8 /* ether_unix.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E413D93720D2613500E437D8 /* ether_unix.cpp */; };
 		E413D93A20D2614E00E437D8 /* extfs_macosx.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E413D93920D2614E00E437D8 /* extfs_macosx.cpp */; };
-		E4150D1420D559800077C51A /* SDL2.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E4150D1320D559800077C51A /* SDL2.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E416BEE82410AA4E00751E6D /* runtool.c in Sources */ = {isa = PBXBuildFile; fileRef = E416BEE72410AA4E00751E6D /* runtool.c */; };
 		E416BEEA2410AA9800751E6D /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E416BEE92410AA9800751E6D /* Security.framework */; };
 		E416BEED2410AE0900751E6D /* etherhelpertool in Resources */ = {isa = PBXBuildFile; fileRef = E416BEEC2410AE0000751E6D /* etherhelpertool */; };
@@ -126,7 +125,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				E4150D1420D559800077C51A /* SDL2.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -134,6 +132,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2-2.0.0.dylib"; path = "../../../../../../../opt/homebrew/Cellar/sdl2/2.32.8/lib/libSDL2-2.0.0.dylib"; sourceTree = "<group>"; };
 		520A1618300564A5005DCC43 /* BasiliskII.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = BasiliskII.icon; sourceTree = "<group>"; };
 		5D5C3B0924B2DF3400CDAB41 /* bincue.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = bincue.cpp; path = ../bincue.cpp; sourceTree = "<group>"; };
 		5D5C3B0B24B2DF4200CDAB41 /* bincue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bincue.h; sourceTree = "<group>"; };
@@ -328,7 +327,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E413D93620D260DA00E437D8 /* SDL2.framework in Frameworks */,
+				0F908C9C3059F012006579CE /* libSDL2-2.0.0.dylib in Frameworks */,
 				E416BEEA2410AA9800751E6D /* Security.framework in Frameworks */,
 				756C1B391F25306A00620917 /* AppKit.framework in Frameworks */,
 				752F26FB1F240E69001032B4 /* IOKit.framework in Frameworks */,
@@ -392,6 +391,7 @@
 		752F26F71F240E51001032B4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */,
 				E447066C25D8FCB400EA2C14 /* Metal.framework */,
 				E416BEE92410AA9800751E6D /* Security.framework */,
 				E413D93520D260DA00E437D8 /* SDL2.framework */,
@@ -1016,8 +1016,9 @@
 				ENABLE_NS_ASSERTIONS = YES;
 				ENABLE_TESTABILITY = NO;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(LOCAL_LIBRARY_DIR)/Frameworks",
+					/Library/Frameworks,
+					/Users/user2/Documents/macemu/BasiliskII/src/MacOSX,
+					/opt/homebrew/opt/sdl2/lib,
 				);
 				GCC_CW_ASM_SYNTAX = NO;
 				GCC_C_LANGUAGE_STANDARD = "compiler-default";
@@ -1037,7 +1038,7 @@
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = NO;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				HEADER_SEARCH_PATHS = "";
+				HEADER_SEARCH_PATHS = /opt/homebrew/Cellar/sdl2/2.32.8/include/SDL2;
 				"HEADER_SEARCH_PATHS[arch=arm64]" = (
 					/Library/Frameworks/SDL2.framework/Headers,
 					../MacOSX,
@@ -1056,12 +1057,27 @@
 				);
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INSTALL_PATH = "$(HOME)/Applications";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				LIBRARY_SEARCH_PATHS = /usr/local/lib;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks /opt/homebrew/opt/sdl2/lib";
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/Cellar/sdl2/2.32.8/lib,
+					/opt/homebrew/opt/mpfr/lib,
+					/opt/homebrew/opt/gmp/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12;
 				ONLY_ACTIVE_ARCH = NO;
-				OTHER_CFLAGS = "-fwrapv";
-				OTHER_LDFLAGS = "";
+				OTHER_CFLAGS = (
+					"-fwrapv",
+					"-I/opt/homebrew/Cellar/sdl2/2.32.8/include/SDL2",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-I/opt/homebrew/Cellar/sdl2/2.32.8/include/SDL2",
+				);
+				OTHER_LDFLAGS = (
+					"-lSDL2",
+					"-lmpfr",
+					"-lgmp",
+				);
 				"OTHER_LDFLAGS[arch=arm64]" = (
 					"-luae_cpu_arm64",
 					"-lgmp",
@@ -1101,8 +1117,9 @@
 				ENABLE_NS_ASSERTIONS = YES;
 				ENABLE_TESTABILITY = NO;
 				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(LOCAL_LIBRARY_DIR)/Frameworks",
+					/Library/Frameworks,
+					/Users/user2/Documents/macemu/BasiliskII/src/MacOSX,
+					/opt/homebrew/opt/sdl2/lib,
 				);
 				GCC_CW_ASM_SYNTAX = NO;
 				GCC_C_LANGUAGE_STANDARD = "compiler-default";
@@ -1123,7 +1140,7 @@
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = NO;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				HEADER_SEARCH_PATHS = "";
+				HEADER_SEARCH_PATHS = /opt/homebrew/Cellar/sdl2/2.32.8/include/SDL2;
 				"HEADER_SEARCH_PATHS[arch=arm64]" = (
 					/Library/Frameworks/SDL2.framework/Headers,
 					../MacOSX,
@@ -1142,11 +1159,26 @@
 				);
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
 				INSTALL_PATH = "$(HOME)/Applications";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				LIBRARY_SEARCH_PATHS = /usr/local/lib;
-				MACOSX_DEPLOYMENT_TARGET = 10.13;
-				OTHER_CFLAGS = "-fwrapv";
-				OTHER_LDFLAGS = "";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks /opt/homebrew/opt/sdl2/lib";
+				LIBRARY_SEARCH_PATHS = (
+					/opt/homebrew/Cellar/sdl2/2.32.8/lib,
+					/opt/homebrew/opt/mpfr/lib,
+					/opt/homebrew/opt/gmp/lib,
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12;
+				OTHER_CFLAGS = (
+					"-fwrapv",
+					"-I/opt/homebrew/Cellar/sdl2/2.32.8/include/SDL2",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-I/opt/homebrew/Cellar/sdl2/2.32.8/include/SDL2",
+				);
+				OTHER_LDFLAGS = (
+					"-lSDL2",
+					"-lmpfr",
+					"-lgmp",
+				);
 				"OTHER_LDFLAGS[arch=arm64]" = (
 					"-luae_cpu_arm64",
 					"-lgmp",
