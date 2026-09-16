@@ -1,0 +1,19 @@
+name: Basilisk II harness
+on:
+  push:
+    paths: ['tools/benchmark/**', 'scripts/bench.sh', 'tests/**', '.github/workflows/basiliskii-tests.yml']
+  pull_request:
+jobs:
+  harness:
+    strategy:
+      matrix:
+        os: [macos-14, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Xcode benchmark tests
+        run: >-
+          xcodebuild test
+          -project BasiliskII/src/MacOSX/BasiliskII.xcodeproj
+          -scheme BasiliskIITests
+          -destination 'platform=macOS'
