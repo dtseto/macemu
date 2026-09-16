@@ -1,0 +1,1 @@
+{"scenarios":[{"name":"rom-smoke","command":["BasiliskII/src/Unix/BasiliskII","--config","/path/to/test.prefs"],"timeout_seconds":120,"timeout_is_success":true,"environment":{"B2_BENCHMARK_METRICS":"1","SDL_VIDEODRIVER":"dummy","SDL_AUDIODRIVER":"dummy"},"milestones":{"rom_started":"Using ROM file|PatchROM","desktop":"B2_DESKTOP_READY"}}]}
