@@ -23,6 +23,8 @@
 #include "timer.h"
 
 #include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define DEBUG 0
 #include "debug.h"
@@ -31,6 +33,26 @@
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 0
 #endif
+
+#if defined(CLOCK_MONOTONIC)
+#define B2_TIMER_CLOCK CLOCK_MONOTONIC
+#define B2_TIMER_CLOCK_SOURCE "monotonic"
+#else
+#define B2_TIMER_CLOCK CLOCK_REALTIME
+#define B2_TIMER_CLOCK_SOURCE "realtime"
+#endif
+
+static void report_timer_clock_source(void)
+{
+	static bool reported = false;
+	if (!reported) {
+		const char *enabled = getenv("B2_BENCHMARK_METRICS");
+		if (enabled && enabled[0] && enabled[0] != '0') {
+			printf("B2_METRIC timer.clock_source=%s\n", B2_TIMER_CLOCK_SOURCE);
+			reported = true;
+		}
+	}
+}
 
 #if defined(__MACH__)
 #include <mach/mach.h>
@@ -104,10 +126,11 @@ uint32 TimerDateTime(void)
 
 void timer_current_time(tm_time_t &t)
 {
+	report_timer_clock_source();
 #if defined(__MACH__)
 	mach_current_time(t);
 #elif defined(HAVE_CLOCK_GETTIME)
-	clock_gettime(CLOCK_REALTIME, &t);
+	clock_gettime(B2_TIMER_CLOCK, &t);
 #else
 	gettimeofday(&t, NULL);
 #endif
@@ -242,13 +265,14 @@ int32 timer_host2mac_time(tm_time_t hosttime)
 
 uint64 GetTicks_usec(void)
 {
+	report_timer_clock_source();
 #if defined(__MACH__)
 	tm_time_t t;
 	mach_current_time(t);
 	return (uint64)t.tv_sec * 1000000 + t.tv_nsec / 1000;
 #elif defined(HAVE_CLOCK_GETTIME)
 	struct timespec t;
-	clock_gettime(CLOCK_REALTIME, &t);
+	clock_gettime(B2_TIMER_CLOCK, &t);
 	return (uint64)t.tv_sec * 1000000 + t.tv_nsec / 1000;
 #else
 	struct timeval t;

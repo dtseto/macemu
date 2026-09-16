@@ -583,7 +583,11 @@ static void *timer_func(void *arg)
 {
 	while (!timer_thread_cancel) {
 		// Wait until time specified by wakeup_time
-		clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &wakeup_time, NULL);
+		#if defined(CLOCK_MONOTONIC)
+			clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup_time, NULL);
+#else
+			clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &wakeup_time, NULL);
+#endif
 
 		tm_time_t system_time;
 		timer_current_time(system_time);
