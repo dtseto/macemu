@@ -49,6 +49,11 @@ static int audio_channel_count_index = 0;
 static SDL_sem *audio_irq_done_sem = NULL;			// Signal from interrupt to streaming thread: data block read
 static uint8 silence_byte;							// Byte value to use to fill sound buffers with silence
 static uint8 *audio_mix_buf = NULL;
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+static SDL_atomic_t audio_shutting_down;
+#else
+static volatile bool audio_shutting_down = false;
+#endif
 static int main_volume = MAC_MAX_VOLUME;
 static int speaker_volume = MAC_MAX_VOLUME;
 static bool main_mute = false;
@@ -57,6 +62,24 @@ static bool speaker_mute = false;
 // Prototypes
 static void stream_func(void *arg, uint8 *stream, int stream_len);
 static int get_audio_volume();
+
+static bool is_audio_shutting_down()
+{
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	return SDL_AtomicGet(&audio_shutting_down) != 0;
+#else
+	return audio_shutting_down;
+#endif
+}
+
+static void set_audio_shutting_down(bool shutting_down)
+{
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	SDL_AtomicSet(&audio_shutting_down, shutting_down ? 1 : 0);
+#else
+	audio_shutting_down = shutting_down;
+#endif
+}
 
 
 /*
@@ -126,11 +149,16 @@ static bool open_sdl_audio(void)
 #endif
 	printf("Using SDL/%s audio output\n", driver_name ? driver_name : "");
 	silence_byte = audio_spec.silence;
-	SDL_PauseAudio(0);
 
-	// Sound buffer size = 4096 frames
+	// Allocate callback state before unpausing the device.
 	audio_frames_per_block = audio_spec.samples;
 	audio_mix_buf = (uint8*)malloc(audio_spec.size);
+	if (audio_mix_buf == NULL) {
+		SDL_CloseAudio();
+		return false;
+	}
+	set_audio_shutting_down(false);
+	SDL_PauseAudio(0);
 	return true;
 }
 
@@ -180,10 +208,20 @@ void AudioInit(void)
 
 static void close_audio(void)
 {
-	// Close audio device
+	if (!audio_open)
+		return;
+
+	// The callback can be blocked waiting for the emulation thread to service
+	// an audio interrupt. During shutdown that thread cannot provide the ack,
+	// so make the callback cancellable and release any outstanding wait first.
+	set_audio_shutting_down(true);
+	if (audio_irq_done_sem)
+		SDL_SemPost(audio_irq_done_sem);
+
 #if defined(BINCUE)
 	CloseAudio_bincue();
 #endif
+	SDL_PauseAudio(1);
 	SDL_CloseAudio();
 	free(audio_mix_buf);
 	audio_mix_buf = NULL;
@@ -198,8 +236,10 @@ void AudioExit(void)
 	ExitBinCue();
 #endif
 	// Delete semaphore
-	if (audio_irq_done_sem)
+	if (audio_irq_done_sem) {
 		SDL_DestroySemaphore(audio_irq_done_sem);
+		audio_irq_done_sem = NULL;
+	}
 }
 
 
@@ -227,6 +267,11 @@ void audio_exit_stream()
 
 static void stream_func(void *arg, uint8 *stream, int stream_len)
 {
+	if (is_audio_shutting_down()) {
+		memset(stream, silence_byte, stream_len);
+		return;
+	}
+
 	if (AudioStatus.num_sources) {
 		// Trigger audio interrupt to get new buffer
 		D(bug("stream: triggering irq\n"));
@@ -235,6 +280,10 @@ static void stream_func(void *arg, uint8 *stream, int stream_len)
 		D(bug("stream: waiting for ack\n"));
 		SDL_SemWait(audio_irq_done_sem);
 		D(bug("stream: ack received\n"));
+		if (is_audio_shutting_down()) {
+			memset(stream, silence_byte, stream_len);
+			return;
+		}
 
 		// Get size of audio data
 		uint32 apple_stream_info = ReadMacInt32(audio_data + adatStreamInfo);
@@ -294,8 +343,9 @@ void AudioInterrupt(void)
 	} else
 		WriteMacInt32(audio_data + adatStreamInfo, 0);
 
-	// Signal stream function
-	SDL_SemPost(audio_irq_done_sem);
+	// Signal stream function. It may already be gone during shutdown.
+	if (audio_irq_done_sem)
+		SDL_SemPost(audio_irq_done_sem);
 	D(bug("AudioInterrupt done\n"));
 }
 
