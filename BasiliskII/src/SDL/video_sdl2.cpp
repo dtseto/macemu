@@ -1142,11 +1142,17 @@ void driver_base::init()
 	if (!video_vosf_init(monitor)) {
 		WarningAlert(GetString(STR_VOSF_INIT_ERR));
 		use_vosf = false;
+		benchmark_vosf_accepted = 0;
 	}
-	else if (!video_vosf_profitable()) {
-		video_vosf_exit();
-		printf("VOSF acceleration is not profitable on this platform, disabling it\n");
-		use_vosf = false;
+	else {
+		benchmark_vosf_threshold_usec = video_vosf_effective_threshold(PrefsFindInt32("vosf_threshold"));
+		const bool profitable = video_vosf_profitable(&benchmark_vosf_duration_usec, &benchmark_vosf_page_faults);
+		benchmark_vosf_accepted = profitable ? 1 : 0;
+		if (!profitable) {
+			video_vosf_exit();
+			printf("VOSF acceleration is not profitable on this platform, disabling it\n");
+			use_vosf = false;
+		}
 	}
     if (!use_vosf) {
 		free(the_buffer_copy);

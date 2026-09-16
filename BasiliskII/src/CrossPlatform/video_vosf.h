@@ -230,8 +230,8 @@ static uint32 page_extend(uint32 size)
 #ifndef VOSF_PROFITABLE_TRIES
 #define VOSF_PROFITABLE_TRIES VOSF_PROFITABLE_TRIES_DFL
 #endif
+#include "video_vosf_policy.h"
 const int VOSF_PROFITABLE_TRIES_DFL = 3;		// Make 3 attempts for full screen update
-const int VOSF_PROFITABLE_THRESHOLD = 16667/2;	// 60 Hz (half of the quantum)
 
 static bool video_vosf_profitable(uint32 *duration_p = NULL, uint32 *n_page_faults_p = NULL)
 {
@@ -268,7 +268,8 @@ static bool video_vosf_profitable(uint32 *duration_p = NULL, uint32 *n_page_faul
 	  *n_page_faults_p = n_page_faults;
 
 	D(bug("Triggered %d page faults in %ld usec (%.1f usec per fault)\n", n_page_faults, duration, double(duration) / double(n_page_faults)));
-	return ((duration / n_tries) < (VOSF_PROFITABLE_THRESHOLD * (frame_skip ? frame_skip : 1)));
+	const uint32 threshold = video_vosf_effective_threshold(PrefsFindInt32("vosf_threshold"));
+	return video_vosf_duration_is_profitable(duration, n_tries, frame_skip, threshold);
 }
 
 

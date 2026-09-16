@@ -53,6 +53,7 @@ prefs_desc common_prefs_items[] = {
 	{"bootdriver", TYPE_INT32, false, "boot driver number"},
 	{"ramsize", TYPE_INT32, false,    "size of Mac RAM in bytes"},
 	{"frameskip", TYPE_INT32, false,  "number of frames to skip in refreshed video modes"},
+	{"vosf_threshold", TYPE_INT32, false, "VOSF full-screen fault threshold in microseconds (0=automatic)"},
 	{"modelid", TYPE_INT32, false,    "Mac Model ID (Gestalt Model ID minus 6)"},
 	{"cpu", TYPE_INT32, false,        "CPU type (0 = 68000, 1 = 68010 etc.)"},
 	{"fpu", TYPE_BOOLEAN, false,      "enable FPU emulation"},
@@ -105,6 +106,7 @@ void AddPrefsDefaults(void)
 	PrefsAddInt32("bootdrive", 0);
 	PrefsAddInt32("ramsize", 8 * 1024 * 1024);
 	PrefsAddInt32("frameskip", 6);
+	PrefsAddInt32("vosf_threshold", 0);
 	PrefsAddInt32("modelid", 5);	// Mac IIci
 	PrefsAddInt32("cpu", 3);		// 68030
 	PrefsAddInt32("displaycolordepth", 0);
