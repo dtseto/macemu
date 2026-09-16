@@ -68,6 +68,7 @@
 #include "video.h"
 #include "video_defs.h"
 #include "video_blit.h"
+#include "video_palette.h"
 #include "vm_alloc.h"
 #include "cdrom.h"
 
@@ -150,6 +151,42 @@ static SDL_Renderer * sdl_renderer = NULL;			// Handle to SDL2 renderer
 static SDL_threadID sdl_renderer_thread_id = 0;		// Thread ID where the SDL_renderer was created, and SDL_renderer ops should run (for compatibility w/ d3d9)
 static SDL_Texture * sdl_texture = NULL;			// Handle to a GPU texture, with which to draw guest_surface to
 static SDL_Rect sdl_update_video_rect = {0,0,0,0};  // Union of all rects to update, when updating sdl_texture
+
+// Opt-in counters consumed by tools/benchmark. Keeping them behind an
+// environment variable avoids perturbing normal emulator runs.
+static bool benchmark_video_metrics = false;
+static uint64 benchmark_present_count = 0;
+static uint64 benchmark_present_ticks = 0;
+static uint64 benchmark_upload_bytes = 0;
+static uint64 benchmark_dirty_pixels = 0;
+static uint64 benchmark_present_skipped = 0;
+static uint64 benchmark_present_rect_pixels = 0;
+static uint32 benchmark_last_present_width = 0;
+static uint32 benchmark_last_present_height = 0;
+static int benchmark_vosf_accepted = -1;
+static uint32 benchmark_vosf_duration_usec = 0;
+static uint32 benchmark_vosf_page_faults = 0;
+static uint32 benchmark_vosf_threshold_usec = 0;
+
+static void report_video_metrics(void)
+{
+	if (!benchmark_video_metrics)
+		return;
+	const uint64 frequency = SDL_GetPerformanceFrequency();
+	const uint64 present_ns = frequency ? benchmark_present_ticks * 1000000000ULL / frequency : 0;
+	printf("B2_METRIC video.present_count=%llu\n", (unsigned long long)benchmark_present_count);
+	printf("B2_METRIC video.present_ns=%llu\n", (unsigned long long)present_ns);
+	printf("B2_METRIC video.upload_bytes=%llu\n", (unsigned long long)benchmark_upload_bytes);
+	printf("B2_METRIC video.dirty_pixels=%llu\n", (unsigned long long)benchmark_dirty_pixels);
+	printf("B2_METRIC video.present_skipped=%llu\n", (unsigned long long)benchmark_present_skipped);
+	printf("B2_METRIC video.present_rect_pixels=%llu\n", (unsigned long long)benchmark_present_rect_pixels);
+	printf("B2_METRIC video.present_rect_width=%u\n", benchmark_last_present_width);
+	printf("B2_METRIC video.present_rect_height=%u\n", benchmark_last_present_height);
+	printf("B2_METRIC vosf.accepted=%d\n", benchmark_vosf_accepted);
+	printf("B2_METRIC vosf.duration_usec=%u\n", benchmark_vosf_duration_usec);
+	printf("B2_METRIC vosf.page_faults=%u\n", benchmark_vosf_page_faults);
+	printf("B2_METRIC vosf.threshold_usec=%u\n", benchmark_vosf_threshold_usec);
+}
 static SDL_mutex * sdl_update_video_mutex = NULL;   // Mutex to protect sdl_update_video_rect
 static int screen_depth;							// Depth of current screen
 #ifdef SHEEPSHAVER
@@ -158,6 +195,17 @@ static SDL_Cursor *sdl_cursor = NULL;				// Copy of Mac cursor
 static SDL_Palette *sdl_palette = NULL;				// Color palette to be used as CLUT and gamma table
 static bool sdl_palette_changed = false;			// Flag: Palette changed, redraw thread must set new colors
 static bool toggle_fullscreen = false;
+static uint32 indexed_palette[256];				// Packed host colors for indexed modes
+
+static void rebuild_indexed_palette(void)
+{
+	if (!sdl_palette || !host_surface)
+		return;
+	for (int index = 0; index < 256; ++index) {
+		const SDL_Color &color = sdl_palette->colors[index];
+		indexed_palette[index] = SDL_MapRGBA(host_surface->format, color.r, color.g, color.b, 255);
+	}
+}
 static bool did_add_event_watch = false;
 
 static bool mouse_grabbed = false;
@@ -912,7 +960,12 @@ static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flag
 
 static int present_sdl_video()
 {
-	if (SDL_RectEmpty(&sdl_update_video_rect)) return 0;
+	if (SDL_RectEmpty(&sdl_update_video_rect)) {
+		if (benchmark_video_metrics)
+			benchmark_present_skipped++;
+		return 0;
+	}
+	const uint64 present_started = benchmark_video_metrics ? SDL_GetPerformanceCounter() : 0;
 	
 	if (!sdl_renderer || !sdl_texture || !guest_surface) {
 		printf("WARNING: A video mode does not appear to have been set.\n");
@@ -943,8 +996,18 @@ static int present_sdl_video()
 		host_surface != NULL &&
 		guest_surface != NULL)
 	{
-		SDL_Rect destRect = sdl_update_video_rect;
-		int result = SDL_BlitSurface(guest_surface, &sdl_update_video_rect, host_surface, &destRect);
+		int result = 0;
+		if (guest_surface->format->BitsPerPixel == 8 && host_surface->format->BytesPerPixel == 4) {
+			video_expand_indexed_rect(
+				(const uint8_t *)guest_surface->pixels, guest_surface->pitch,
+				(uint8_t *)host_surface->pixels, host_surface->pitch,
+				sdl_update_video_rect.x, sdl_update_video_rect.y,
+				sdl_update_video_rect.w, sdl_update_video_rect.h,
+				indexed_palette);
+		} else {
+			SDL_Rect destRect = sdl_update_video_rect;
+			result = SDL_BlitSurface(guest_surface, &sdl_update_video_rect, host_surface, &destRect);
+		}
 		if (result != 0) {
 			SDL_UnlockMutex(sdl_update_video_mutex);
 			UNLOCK_PALETTE;
@@ -956,7 +1019,14 @@ static int present_sdl_video()
     // Update the host OS' texture
 	uint8_t *srcPixels = (uint8_t *)host_surface->pixels +
 		sdl_update_video_rect.y * host_surface->pitch +
-		sdl_update_video_rect.x * host_surface->format->BytesPerPixel;
+		 sdl_update_video_rect.x * host_surface->format->BytesPerPixel;
+	if (benchmark_video_metrics) {
+		benchmark_dirty_pixels += (uint64)sdl_update_video_rect.w * sdl_update_video_rect.h;
+		benchmark_upload_bytes += (uint64)sdl_update_video_rect.w * sdl_update_video_rect.h * 4;
+		benchmark_present_rect_pixels += (uint64)sdl_update_video_rect.w * sdl_update_video_rect.h;
+		benchmark_last_present_width = sdl_update_video_rect.w;
+		benchmark_last_present_height = sdl_update_video_rect.h;
+	}
 
 	uint8_t *dstPixels;
 	int dstPitch;
@@ -964,8 +1034,8 @@ static int present_sdl_video()
 		SDL_UnlockMutex(sdl_update_video_mutex);
 		return -1;
 	}
-	for (int y = 0; y < sdl_update_video_rect.h; y++) {
-		memcpy(dstPixels, srcPixels, sdl_update_video_rect.w << 2);
+	for (int y = 0; y < sdl_update_video_rect.h; ++y) {
+		memcpy(dstPixels, srcPixels, sdl_update_video_rect.w * host_surface->format->BytesPerPixel);
 		srcPixels += host_surface->pitch;
 		dstPixels += dstPitch;
 	}
@@ -986,6 +1056,10 @@ static int present_sdl_video()
 	
     // Update the display
 	SDL_RenderPresent(sdl_renderer);
+	if (benchmark_video_metrics) {
+		benchmark_present_ticks += SDL_GetPerformanceCounter() - present_started;
+		benchmark_present_count++;
+	}
     
     // Indicate success to the caller!
     return 0;
@@ -1100,6 +1174,7 @@ void driver_base::init()
 	sdl_palette = SDL_AllocPalette(256);
 	sdl_palette->colors[1] = (SDL_Color){ .r = 0, .g = 0, .b = 0, .a = 255 };
 	SDL_SetSurfacePalette(s, sdl_palette);
+	rebuild_indexed_palette();
 
 	if (PrefsFindBool("init_grab") && !PrefsFindBool("hardcursor")) grab_mouse();
 }
@@ -1204,6 +1279,7 @@ void driver_base::update_palette(void)
 
 	if ((int)VIDEO_MODE_DEPTH <= VIDEO_DEPTH_8BIT) {
 		SDL_SetSurfacePalette(s, sdl_palette);
+		rebuild_indexed_palette();
 		SDL_LockMutex(sdl_update_video_mutex);
 		sdl_update_video_rect.x = 0;
 		sdl_update_video_rect.y = 0;
@@ -1405,6 +1481,14 @@ bool VideoInit(bool classic)
 {
 #endif
 	classic_mode = classic;
+	static bool did_init_benchmark_metrics = false;
+	if (!did_init_benchmark_metrics) {
+		const char *enabled = getenv("B2_BENCHMARK_METRICS");
+		benchmark_video_metrics = enabled && enabled[0] && strcmp(enabled, "0") != 0;
+		if (benchmark_video_metrics)
+			atexit(report_video_metrics);
+		did_init_benchmark_metrics = true;
+	}
 
 #ifdef ENABLE_VOSF
 	// Zero the mainBuffer structure
