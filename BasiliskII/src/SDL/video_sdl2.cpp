@@ -1275,7 +1275,11 @@ driver_base::~driver_base()
 	}
 #endif
 
+#ifndef __MACOSX__
+	// Cocoa cursor APIs must run on the main thread. On macOS the main
+	// VideoExit path restores the cursor after the redraw thread is stopped.
 	SDL_ShowCursor(1);
+#endif
 }
 
 // Palette has changed
@@ -1739,6 +1743,13 @@ void VideoExit(void)
 	vector<monitor_desc *>::iterator i, end = VideoMonitors.end();
 	for (i = VideoMonitors.begin(); i != end; ++i)
 		dynamic_cast<SDL_monitor_desc *>(*i)->video_close();
+
+#ifdef __MACOSX__
+	// SDL's Cocoa cursor implementation touches NSWindow and must be called
+	// from the main thread, not from driver destruction on the redraw thread.
+	SDL_SetRelativeMouseMode(SDL_FALSE);
+	SDL_ShowCursor(SDL_ENABLE);
+#endif
 
 	// Destroy SDL video window
 	delete_sdl_video_window();
