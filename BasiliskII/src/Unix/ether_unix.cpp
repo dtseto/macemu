@@ -27,10 +27,10 @@
  *    the ethernet thread doesn't stop on exit. An explicit check is
  *    performed to workaround this problem.
  */
-#if (defined __APPLE__ && defined __MACH__) || ! defined HAVE_POLL
-#define USE_POLL 0
-#else
+#if defined HAVE_POLL
 #define USE_POLL 1
+#else
+#define USE_POLL 0
 #endif
 
 // Define to let the slirp library determine the right timeout for select()
