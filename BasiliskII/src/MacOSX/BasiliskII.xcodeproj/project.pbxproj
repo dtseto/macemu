@@ -132,6 +132,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0F6C4E97305A4D2E005D4E15 /* video_neon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = video_neon.h; sourceTree = "<group>"; };
 		0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2-2.0.0.dylib"; path = "../../../../../../../opt/homebrew/Cellar/sdl2/2.32.8/lib/libSDL2-2.0.0.dylib"; sourceTree = "<group>"; };
 		0F908CA2305A0BFE006579CE /* BasiliskIITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BasiliskIITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		520A1618300564A5005DCC43 /* BasiliskII.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = BasiliskII.icon; sourceTree = "<group>"; };
@@ -552,6 +553,7 @@
 				75CBCF761F5DB65E00830063 /* video_sdl.cpp */,
 				75CBCF741F5DB3AD00830063 /* video_sdl2.cpp */,
 				752F27021F242F51001032B4 /* xpram_sdl.cpp */,
+				0F6C4E97305A4D2E005D4E15 /* video_neon.h */,
 			);
 			name = SDL;
 			path = ../SDL;

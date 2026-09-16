@@ -50,6 +50,7 @@
 #include <vector>
 #include <string>
 #include <math.h>
+#include "video_neon.h"
 
 #ifdef __MACOSX__
 #include "utils_macosx.h"
@@ -161,6 +162,8 @@ static uint64 benchmark_upload_bytes = 0;
 static uint64 benchmark_dirty_pixels = 0;
 static uint64 benchmark_present_skipped = 0;
 static uint64 benchmark_present_rect_pixels = 0;
+static uint64 benchmark_dirty_scan_bytes = 0;
+static uint64 benchmark_dirty_scan_ticks = 0;
 static uint32 benchmark_last_present_width = 0;
 static uint32 benchmark_last_present_height = 0;
 static int benchmark_vosf_accepted = -1;
@@ -173,6 +176,16 @@ static void report_video_metrics(void)
 	if (!benchmark_video_metrics)
 		return;
 	const uint64 frequency = SDL_GetPerformanceFrequency();
+	const uint64 dirty_scan_ns = frequency ? benchmark_dirty_scan_ticks * 1000000000ULL / frequency : 0;
+	printf("B2_METRIC video.dirty_scan_bytes=%llu\n", (unsigned long long)benchmark_dirty_scan_bytes);
+	printf("B2_METRIC video.dirty_scan_ns=%llu\n", (unsigned long long)dirty_scan_ns);
+	printf("B2_METRIC video.neon_path_active=%d\n", (int)
+#ifdef __aarch64__
+		1
+#else
+		0
+#endif
+	);
 	const uint64 present_ns = frequency ? benchmark_present_ticks * 1000000000ULL / frequency : 0;
 	printf("B2_METRIC video.present_count=%llu\n", (unsigned long long)benchmark_present_count);
 	printf("B2_METRIC video.present_ns=%llu\n", (unsigned long long)present_ns);
@@ -2579,6 +2592,7 @@ static void handle_events(void)
 // Static display update (fixed frame rate, but incremental)
 static void update_display_static(driver_base *drv)
 {
+	const uint64 dirty_scan_started = benchmark_video_metrics ? SDL_GetPerformanceCounter() : 0;
 	// Incremental update code
 	int wide = 0, high = 0;
 	uint32 x1, x2, y1, y2;
@@ -2590,14 +2604,18 @@ static void update_display_static(driver_base *drv)
 	// Check for first line from top and first line from bottom that have changed
 	y1 = 0;
 	for (uint32 j = 0; j < VIDEO_MODE_Y; j++) {
-		if (memcmp(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
+		if (benchmark_video_metrics)
+			benchmark_dirty_scan_bytes += bytes_per_row;
+		if (neon_memcmp_differs(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
 			y1 = j;
 			break;
 		}
 	}
 	y2 = y1 - 1;
 	for (uint32 j = VIDEO_MODE_Y; j-- > y1; ) {
-		if (memcmp(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
+		if (benchmark_video_metrics)
+			benchmark_dirty_scan_bytes += bytes_per_row;
+		if (neon_memcmp_differs(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
 			y2 = j;
 			break;
 		}
@@ -2728,12 +2746,15 @@ static void update_display_static(driver_base *drv)
 			}
 		}
 	}
+	if (benchmark_video_metrics)
+		benchmark_dirty_scan_ticks += SDL_GetPerformanceCounter() - dirty_scan_started;
 }
 
 // Static display update (fixed frame rate, bounding boxes based)
 // XXX use NQD bounding boxes to help detect dirty areas?
 static void update_display_static_bbox(driver_base *drv)
 {
+	const uint64 dirty_scan_started = benchmark_video_metrics ? SDL_GetPerformanceCounter() : 0;
 	const VIDEO_MODE &mode = drv->mode;
 	bool blit = (int)VIDEO_MODE_DEPTH == VIDEO_DEPTH_16BIT;
 
@@ -2766,7 +2787,9 @@ static void update_display_static_bbox(driver_base *drv)
 			for (uint32 j = y; j < (y + h); j++) {
 				const uint32 yb = j * bytes_per_row;
 				const uint32 dst_yb = j * dst_bytes_per_row;
-				if (memcmp(&the_buffer[yb + xb], &the_buffer_copy[yb + xb], xs) != 0) {
+				if (benchmark_video_metrics)
+			benchmark_dirty_scan_bytes += xs;
+		if (neon_memcmp_differs(&the_buffer[yb + xb], &the_buffer_copy[yb + xb], xs)) {
 					memcpy(&the_buffer_copy[yb + xb], &the_buffer[yb + xb], xs);
 					if (blit) Screen_blit((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
 					dirty = true;
@@ -2789,6 +2812,8 @@ static void update_display_static_bbox(driver_base *drv)
 	// Refresh display
 	if (nr_boxes)
 		update_sdl_video(drv->s, nr_boxes, boxes);
+	if (benchmark_video_metrics)
+		benchmark_dirty_scan_ticks += SDL_GetPerformanceCounter() - dirty_scan_started;
 }
 
 
