@@ -110,6 +110,53 @@ static char RootPath[MAX_PATH_LENGTH];
 static bool ready = false;
 static struct stat root_stat;
 
+// Short-lived cache for repeated Finder and directory metadata queries.
+enum { STAT_CACHE_SIZE = 64 };
+static const uint64 STAT_CACHE_TTL_USEC = 500000;
+struct StatCacheEntry {
+	bool valid;
+	char path[MAX_PATH_LENGTH];
+	struct stat value;
+	uint64 timestamp;
+	uint64 sequence;
+};
+static StatCacheEntry stat_cache[STAT_CACHE_SIZE] = {};
+static uint64 stat_cache_sequence = 0;
+
+static void stat_cache_invalidate_all(void)
+{
+	for (int i = 0; i < STAT_CACHE_SIZE; i++)
+		stat_cache[i].valid = false;
+}
+
+static int stat_cached(const char *path, struct stat *result)
+{
+	const uint64 now = GetTicks_usec();
+	int oldest = 0;
+	for (int i = 0; i < STAT_CACHE_SIZE; i++) {
+		if (stat_cache[i].valid && strcmp(stat_cache[i].path, path) == 0) {
+			if (now - stat_cache[i].timestamp <= STAT_CACHE_TTL_USEC) {
+				*result = stat_cache[i].value;
+				stat_cache[i].sequence = ++stat_cache_sequence;
+				return 0;
+			}
+			stat_cache[i].valid = false;
+		}
+		if (!stat_cache[i].valid || stat_cache[i].sequence < stat_cache[oldest].sequence)
+			oldest = i;
+	}
+
+	const int result_code = stat(path, result);
+	if (result_code == 0 && strlen(path) < MAX_PATH_LENGTH) {
+		stat_cache[oldest].valid = true;
+		strcpy(stat_cache[oldest].path, path);
+		stat_cache[oldest].value = *result;
+		stat_cache[oldest].timestamp = now;
+		stat_cache[oldest].sequence = ++stat_cache_sequence;
+	}
+	return result_code;
+}
+
 // File system ID/media type
 const int16 MY_FSID = EMULATOR_ID_2;
 const uint32 MY_MEDIA_TYPE = EMULATOR_ID_4;
@@ -440,7 +487,7 @@ void ExtFSInit(void)
 	if (path != NULL) {
 		strncpy(RootPath, path, MAX_PATH_LENGTH - 1);
 		RootPath[MAX_PATH_LENGTH - 1] = 0;
-		if (stat(RootPath, &root_stat))
+		if (stat_cached(RootPath, &root_stat))
 			return;
 		if (!S_ISDIR(root_stat.st_mode))
 			return;
@@ -1212,7 +1259,7 @@ static int16 fs_set_vol(uint32 pb, bool hfs, uint32 vcb)
 
 		// Is it a directory?
 		struct stat st;
-		if (stat(full_path, &st))
+		if (stat_cached(full_path, &st))
 			return dirNFErr;
 		if (!S_ISDIR(st.st_mode))
 			return dirNFErr;
@@ -1300,7 +1347,7 @@ read_next_de:
 
 	// Get stats
 	struct stat st;
-	if (stat(full_path, &st))
+	if (stat_cached(full_path, &st))
 		return fnfErr;
 	if (S_ISDIR(st.st_mode))
 		return fnfErr;
@@ -1353,7 +1400,7 @@ static int16 fs_set_file_info(uint32 pb, bool hfs, uint32 dirID)
 
 	// Get stats
 	struct stat st;
-	if (stat(full_path, &st) < 0)
+	if (stat_cached(full_path, &st) < 0)
 		return errno2oserr();
 	if (S_ISDIR(st.st_mode))
 		return fnfErr;
@@ -1424,7 +1471,7 @@ read_next_de:
 
 	// Get stats
 	struct stat st;
-	if (stat(full_path, &st) < 0)
+	if (stat_cached(full_path, &st) < 0)
 		return errno2oserr();
 	if (dir_index == -1 && !S_ISDIR(st.st_mode))
 		return dirNFErr;
@@ -1506,7 +1553,7 @@ static int16 fs_set_cat_info(uint32 pb)
 
 	// Get stats
 	struct stat st;
-	if (stat(full_path, &st) < 0)
+	if (stat_cached(full_path, &st) < 0)
 		return errno2oserr();
 
 	// Set Finder info
@@ -1749,6 +1796,7 @@ static int16 fs_set_eof(uint32 pb)
 	uint32 size = ReadMacInt32(pb + ioMisc);
 	if (ftruncate(fd, size) < 0)
 		return errno2oserr();
+	stat_cache_invalidate_all();
 
 	// Adjust FCBs
 	WriteMacInt32(fcb + fcbEOF, size);
@@ -1930,6 +1978,7 @@ static int16 fs_write(uint32 pb)
 
 	// Write
 	ssize_t actual = extfs_write(fd, Mac2HostAddr(ReadMacInt32(pb + ioBuffer)), ReadMacInt32(pb + ioReqCount));
+	stat_cache_invalidate_all();
 	int16 write_err = errno2oserr();
 	D(bug("  actual %d\n", actual));
 	WriteMacInt32(pb + ioActCount, actual >= 0 ? actual : 0);
@@ -1963,6 +2012,7 @@ static int16 fs_create(uint32 pb, uint32 dirID)
 		return errno2oserr();
 	else {
 		close(fd);
+		stat_cache_invalidate_all();
 		return noErr;
 	}
 }
@@ -1987,6 +2037,7 @@ static int16 fs_dir_create(uint32 pb)
 		return errno2oserr();
 	else {
 		WriteMacInt32(pb + ioDirID, fs_item->id);
+		stat_cache_invalidate_all();
 		return noErr;
 	}
 }
@@ -2005,8 +2056,10 @@ static int16 fs_delete(uint32 pb, uint32 dirID)
 	// Delete file
 	if (!extfs_remove(full_path))
 		return errno2oserr();
-	else
+	else {
+		stat_cache_invalidate_all();
 		return noErr;
+	}
 }
 
 // Rename file/directory
