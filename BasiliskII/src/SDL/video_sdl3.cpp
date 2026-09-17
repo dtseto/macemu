@@ -66,6 +66,8 @@
 #include "video.h"
 #include "video_defs.h"
 #include "video_blit.h"
+#include "video_neon.h"
+#include "video_palette.h"
 #include "vm_alloc.h"
 #include "cdrom.h"
 
@@ -155,10 +157,13 @@ static SDL_Texture * sdl_texture = NULL;			// Handle to a GPU texture, with whic
 static SDL_Rect sdl_update_video_rect = {0,0,0,0};  // Union of all rects to update, when updating sdl_texture
 static SDL_Mutex * sdl_update_video_mutex = NULL;   // Mutex to protect sdl_update_video_rect
 static int screen_depth;							// Depth of current screen
+static int sdl_guest_depth;							// Depth of the active guest surface
+static int sdl_guest_pitch;							// Bytes per row in the guest framebuffer
 #ifdef SHEEPSHAVER
 static SDL_Cursor *sdl_cursor = NULL;				// Copy of Mac cursor
 #endif
 static SDL_Palette *sdl_palette = NULL;				// Color palette to be used as CLUT and gamma table
+static uint32_t sdl_host_palette[256];				// Packed colors for the 32-bit host surface
 static bool sdl_palette_changed = false;			// Flag: Palette changed, redraw thread must set new colors
 static bool toggle_fullscreen = false;
 static bool did_add_event_watch = false;
@@ -195,6 +200,17 @@ static int redraw_func(void *arg);
 static int present_sdl_video();
 static bool SDLCALL on_sdl_event_generated(void *userdata, SDL_Event *event);
 static bool is_fullscreen(SDL_Window *);
+
+static void rebuild_sdl_host_palette()
+{
+	if (!host_surface || !sdl_palette)
+		return;
+	const SDL_PixelFormatDetails *details = SDL_GetPixelFormatDetails(host_surface->format);
+	for (int i = 0; i < 256; i++) {
+		const SDL_Color &color = sdl_palette->colors[i];
+		sdl_host_palette[i] = SDL_MapRGB(details, NULL, color.r, color.g, color.b);
+	}
+}
 
 // From sys_unix.cpp
 extern void SysMountFirstFloppy(void);
@@ -715,6 +731,8 @@ static float get_mag_rate()
 
 static SDL_Surface *init_sdl_video(int width, int height, int depth, Uint32 flags, int pitch)
 {
+	sdl_guest_depth = depth;
+	sdl_guest_pitch = pitch;
     if (guest_surface) {
         delete_sdl_video_surfaces();
     }
@@ -916,12 +934,20 @@ static int present_sdl_video()
 		host_surface != NULL &&
 		guest_surface != NULL)
 	{
-		SDL_Rect destRect = sdl_update_video_rect;
-		int result = SDL_BlitSurface(guest_surface, &sdl_update_video_rect, host_surface, &destRect);
-		if (!result) {
+		if (sdl_guest_depth == VIDEO_DEPTH_8BIT) {
+			video_expand_indexed_rect(the_buffer, sdl_guest_pitch,
+				(uint8_t *)host_surface->pixels, host_surface->pitch,
+				sdl_update_video_rect.x, sdl_update_video_rect.y,
+				sdl_update_video_rect.w, sdl_update_video_rect.h,
+				sdl_host_palette);
+		} else {
+			SDL_Rect destRect = sdl_update_video_rect;
+			int result = SDL_BlitSurface(guest_surface, &sdl_update_video_rect, host_surface, &destRect);
+			if (!result) {
 			SDL_UnlockMutex(sdl_update_video_mutex);
 			UNLOCK_PALETTE;
-			return -1;
+				return -1;
+			}
 		}
 	}
 	UNLOCK_PALETTE; // passed potential deadlock, can unlock palette
@@ -1854,6 +1880,7 @@ void SDL_monitor_desc::set_palette(uint8 *pal, int num_in)
 		p->b = pal[c*3 + 2] * 0x0101;
 		p++;
 	}
+	rebuild_sdl_host_palette();
 
 	// Recalculate pixel color expansion map
 	if (!IsDirectMode(mode)) {
@@ -2444,14 +2471,14 @@ static void update_display_static(driver_base *drv)
 	// Check for first line from top and first line from bottom that have changed
 	y1 = 0;
 	for (uint32 j = 0; j < VIDEO_MODE_Y; j++) {
-		if (memcmp(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
+		if (neon_memcmp_differs(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
 			y1 = j;
 			break;
 		}
 	}
 	y2 = y1 - 1;
 	for (uint32 j = VIDEO_MODE_Y; j-- > y1; ) {
-		if (memcmp(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
+		if (neon_memcmp_differs(&the_buffer[j * bytes_per_row], &the_buffer_copy[j * bytes_per_row], bytes_per_row)) {
 			y2 = j;
 			break;
 		}
@@ -2620,7 +2647,7 @@ static void update_display_static_bbox(driver_base *drv)
 			for (uint32 j = y; j < (y + h); j++) {
 				const uint32 yb = j * bytes_per_row;
 				const uint32 dst_yb = j * dst_bytes_per_row;
-				if (memcmp(&the_buffer[yb + xb], &the_buffer_copy[yb + xb], xs) != 0) {
+				if (neon_memcmp_differs(&the_buffer[yb + xb], &the_buffer_copy[yb + xb], xs) != 0) {
 					memcpy(&the_buffer_copy[yb + xb], &the_buffer[yb + xb], xs);
 					if (blit) Screen_blit((uint8 *)drv->s->pixels + dst_yb + xb, the_buffer + yb + xb, xs);
 					dirty = true;
