@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F23BA76305B3AF2007E0935 /* Makefile in Resources */ = {isa = PBXBuildFile; fileRef = 0F23BA75305B3AF2007E0935 /* Makefile */; };
 		0F908C9C3059F012006579CE /* libSDL2-2.0.0.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */; };
 		520A1619300564A5005DCC43 /* BasiliskII.icon in Resources */ = {isa = PBXBuildFile; fileRef = 520A1618300564A5005DCC43 /* BasiliskII.icon */; };
 		5D5C3B0A24B2DF3500CDAB41 /* bincue.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5D5C3B0924B2DF3400CDAB41 /* bincue.cpp */; };
@@ -88,33 +89,26 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0F6C4F08305AD7DF005D4E15 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0F6C4EFF305AD7DE005D4E15 /* BasiliskII.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 7539DFB21F23B17E006B2DF2;
+			remoteInfo = BasiliskII;
+		};
+		0FFE7A6A305AF9C60056A333 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0FFE7A66305AF9C50056A333 /* uae_cpu_2026.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E41D7AA12642C004005E8093;
+			remoteInfo = uae_cpu_arm64;
+		};
 		E45769AC2643A65B0063BAF1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E45769A82643A65B0063BAF1 /* uae_cpu.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = E4F537C02642A86D008B27DF;
 			remoteInfo = uae_cpu_x86_64;
-		};
-		E45769B92643A6740063BAF1 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = E45769B52643A6740063BAF1 /* uae_cpu_2021.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = E41D7AA12642C004005E8093;
-			remoteInfo = uae_cpu_arm64;
-		};
-		E45769BC2643A6870063BAF1 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = E45769A82643A65B0063BAF1 /* uae_cpu.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = E4F537BF2642A86D008B27DF;
-			remoteInfo = uae_cpu_x86_64;
-		};
-		E45769BE2643A68B0063BAF1 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = E45769B52643A6740063BAF1 /* uae_cpu_2021.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = E41D7AA02642C004005E8093;
-			remoteInfo = uae_cpu_arm64;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -132,9 +126,12 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0F23BA75305B3AF2007E0935 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		0F6C4E97305A4D2E005D4E15 /* video_neon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = video_neon.h; sourceTree = "<group>"; };
+		0F6C4EFF305AD7DE005D4E15 /* BasiliskII.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = BasiliskII.xcodeproj; path = /Users/user2/Downloads/macemu/BasiliskII/src/MacOSX/BasiliskII.xcodeproj; sourceTree = "<absolute>"; };
 		0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2-2.0.0.dylib"; path = "../../../../../../../opt/homebrew/Cellar/sdl2/2.32.8/lib/libSDL2-2.0.0.dylib"; sourceTree = "<group>"; };
 		0F908CA2305A0BFE006579CE /* BasiliskIITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BasiliskIITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0FFE7A66305AF9C50056A333 /* uae_cpu_2026.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = uae_cpu_2026.xcodeproj; sourceTree = "<group>"; };
 		520A1618300564A5005DCC43 /* BasiliskII.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = BasiliskII.icon; sourceTree = "<group>"; };
 		5D5C3B0924B2DF3400CDAB41 /* bincue.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = bincue.cpp; path = ../bincue.cpp; sourceTree = "<group>"; };
 		5D5C3B0B24B2DF4200CDAB41 /* bincue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bincue.h; sourceTree = "<group>"; };
@@ -319,7 +316,6 @@
 		E416BEEC2410AE0000751E6D /* etherhelpertool */ = {isa = PBXFileReference; lastKnownFileType = text; path = etherhelpertool; sourceTree = BUILT_PRODUCTS_DIR; };
 		E447066C25D8FCB400EA2C14 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		E45769A82643A65B0063BAF1 /* uae_cpu.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = uae_cpu.xcodeproj; sourceTree = "<group>"; };
-		E45769B52643A6740063BAF1 /* uae_cpu_2021.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = uae_cpu_2021.xcodeproj; sourceTree = "<group>"; };
 		E490334D20D3A5890012DD5F /* clip_macosx64.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = clip_macosx64.mm; sourceTree = "<group>"; };
 		E4BF7BD32EAF173A002F2E3A /* serial_unix.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = serial_unix.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -352,11 +348,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0F908C9D305A0B8B006579CE /* BasiliskIITests 2 */ = {
+		0F6C4F01305AD7DE005D4E15 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				0F6C4F09305AD7DF005D4E15 /* BasiliskII.app */,
 			);
-			path = "BasiliskIITests 2";
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0FFE7A67305AF9C50056A333 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0FFE7A6B305AF9C60056A333 /* libuae_cpu_arm64.a */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 		4ECAC23C1F8A89ED0013B963 /* slirp */ = {
@@ -434,15 +439,15 @@
 			isa = PBXGroup;
 			children = (
 				520A1618300564A5005DCC43 /* BasiliskII.icon */,
+				0FFE7A66305AF9C50056A333 /* uae_cpu_2026.xcodeproj */,
 				E45769A82643A65B0063BAF1 /* uae_cpu.xcodeproj */,
-				E45769B52643A6740063BAF1 /* uae_cpu_2021.xcodeproj */,
 				E4150D1320D559800077C51A /* SDL2.framework */,
 				7539E1E41F23B25E006B2DF2 /* src */,
 				753252FF1F535E5D0024025B /* generated src */,
 				0F908CA3305A0BFE006579CE /* BasiliskIITests */,
 				7539DFB31F23B17E006B2DF2 /* Products */,
 				752F26F71F240E51001032B4 /* Frameworks */,
-				0F908C9D305A0B8B006579CE /* BasiliskIITests 2 */,
+				0F23BA75305B3AF2007E0935 /* Makefile */,
 			);
 			sourceTree = "<group>";
 		};
@@ -514,6 +519,7 @@
 		7539DFF91F23B25A006B2DF2 /* MacOSX */ = {
 			isa = PBXGroup;
 			children = (
+				0F6C4EFF305AD7DE005D4E15 /* BasiliskII.xcodeproj */,
 				E416BEEB2410AB0E00751E6D /* etherhelpertool.c */,
 				E416BEE72410AA4E00751E6D /* runtool.c */,
 				7539E2AA1F23CDB7006B2DF2 /* Info.plist */,
@@ -684,14 +690,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		E45769B62643A6740063BAF1 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				E45769BA2643A6740063BAF1 /* libuae_cpu_arm64.a */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -730,8 +728,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				E45769BF2643A68B0063BAF1 /* PBXTargetDependency */,
-				E45769BD2643A6870063BAF1 /* PBXTargetDependency */,
 			);
 			name = BasiliskII;
 			productName = BasiliskII;
@@ -770,12 +766,16 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
+					ProductGroup = 0F6C4F01305AD7DE005D4E15 /* Products */;
+					ProjectRef = 0F6C4EFF305AD7DE005D4E15 /* BasiliskII.xcodeproj */;
+				},
+				{
 					ProductGroup = E45769A92643A65B0063BAF1 /* Products */;
 					ProjectRef = E45769A82643A65B0063BAF1 /* uae_cpu.xcodeproj */;
 				},
 				{
-					ProductGroup = E45769B62643A6740063BAF1 /* Products */;
-					ProjectRef = E45769B52643A6740063BAF1 /* uae_cpu_2021.xcodeproj */;
+					ProductGroup = 0FFE7A67305AF9C50056A333 /* Products */;
+					ProjectRef = 0FFE7A66305AF9C50056A333 /* uae_cpu_2026.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -787,18 +787,25 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
+		0F6C4F09305AD7DF005D4E15 /* BasiliskII.app */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.application;
+			path = BasiliskII.app;
+			remoteRef = 0F6C4F08305AD7DF005D4E15 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		0FFE7A6B305AF9C60056A333 /* libuae_cpu_arm64.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libuae_cpu_arm64.a;
+			remoteRef = 0FFE7A6A305AF9C60056A333 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		E45769AD2643A65B0063BAF1 /* libuae_cpu_x86_64.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
 			path = libuae_cpu_x86_64.a;
 			remoteRef = E45769AC2643A65B0063BAF1 /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		E45769BA2643A6740063BAF1 /* libuae_cpu_arm64.a */ = {
-			isa = PBXReferenceProxy;
-			fileType = archive.ar;
-			path = libuae_cpu_arm64.a;
-			remoteRef = E45769B92643A6740063BAF1 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -816,6 +823,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7539E1341F23B25A006B2DF2 /* BasiliskII.icns in Resources */,
+				0F23BA76305B3AF2007E0935 /* Makefile in Resources */,
 				E4555EED2354434B00139FCE /* Credits.html in Resources */,
 				520A1619300564A5005DCC43 /* BasiliskII.icon in Resources */,
 				E416BEED2410AE0900751E6D /* etherhelpertool in Resources */,
@@ -926,19 +934,6 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		E45769BD2643A6870063BAF1 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = uae_cpu_x86_64;
-			targetProxy = E45769BC2643A6870063BAF1 /* PBXContainerItemProxy */;
-		};
-		E45769BF2643A68B0063BAF1 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = uae_cpu_arm64;
-			targetProxy = E45769BE2643A68B0063BAF1 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin PBXVariantGroup section */
 		7539E00F1F23B25A006B2DF2 /* InfoPlist.strings */ = {
 			isa = PBXVariantGroup;
@@ -972,6 +967,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
@@ -1020,6 +1016,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = fast;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
@@ -1072,7 +1069,7 @@
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_OPTIMIZATION_LEVEL = 1;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					HAVE_CONFIG_H,
@@ -1129,6 +1126,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 3;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					HAVE_CONFIG_H,
@@ -1180,7 +1178,10 @@
 				GCC_ENABLE_PASCAL_STRINGS = NO;
 				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"USE_JIT=1",
+				);
 				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64]" = "$(inherited)";
 				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = (
 					"$(inherited)",
@@ -1286,7 +1287,10 @@
 				GCC_ENABLE_PASCAL_STRINGS = NO;
 				GCC_INLINES_ARE_PRIVATE_EXTERN = NO;
 				GCC_OPTIMIZATION_LEVEL = 3;
-				GCC_PREPROCESSOR_DEFINITIONS = "$(inherited)";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"USE_JIT=1",
+				);
 				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64]" = "$(inherited)";
 				"GCC_PREPROCESSOR_DEFINITIONS[arch=x86_64]" = (
 					"$(inherited)",

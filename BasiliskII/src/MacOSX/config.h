@@ -830,7 +830,7 @@
 #ifdef CPU_x86_64
 #define FPU_IEEE
 #define WINUAE_ARANYM
-#else
+#elif !defined(FPU_UAE)
 #define FPU_MPFR
 #endif
 #else
@@ -840,7 +840,9 @@
 #if USE_JIT
 #define DIRECT_ADDRESSING	1
 #define USE_JIT_FPU
+#if defined(__x86_64__)
 #define X86_64_ASSEMBLY
+#endif
 #define OPTIMIZED_FLAGS
 #endif
 

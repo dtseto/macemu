@@ -1,5 +1,8 @@
 import Foundation
 import Testing
+#if os(macOS)
+import Darwin
+#endif
 
 struct BenchmarkHarnessTests {
     private var repositoryRoot: URL {
@@ -79,6 +82,63 @@ struct BenchmarkHarnessTests {
         #expect(closeDisplay.lowerBound < restoreCursor.lowerBound)
         #expect(restoreCursor.lowerBound < destroyWindow.lowerBound)
     }
+
+    @Test("ARM64 JIT generator emits nonempty handler and dispatch tables")
+    func arm64GeneratedSourcesArePopulated() throws {
+        let compilerDirectory = repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler")
+        let handlers = try String(
+            contentsOf: compilerDirectory.appending(path: "compemu_arm.cpp"),
+            encoding: .utf8
+        )
+        let dispatchTable = try String(
+            contentsOf: compilerDirectory.appending(path: "compstbl_arm.cpp"),
+            encoding: .utf8
+        )
+        let declarations = try String(
+            contentsOf: compilerDirectory.appending(path: "comptbl.h"),
+            encoding: .utf8
+        )
+
+        let handlerPattern = try Regex(#"op_[0-9a-f]+_0_comp_(?:ff|nf)"#)
+        let generatedHandlers = handlers.matches(of: handlerPattern)
+        #expect(generatedHandlers.count > 1_000)
+        #expect(dispatchTable.contains("op_smalltbl_0_comp_ff"))
+        #expect(dispatchTable.contains("op_smalltbl_0_comp_nf"))
+        #expect(dispatchTable.contains("{ 0, 65536, 0 }"))
+        #expect(declarations.contains("op_smalltbl_0_comp_ff"))
+        #expect(declarations.contains("op_smalltbl_0_comp_nf"))
+    }
+
+#if arch(arm64) && os(macOS)
+    @Test("macOS MAP_JIT page executes generated ARM64 instructions")
+    func mapJITExecutesGeneratedARM64() throws {
+        let pageSize = Int(getpagesize())
+        let mapping = mmap(
+            nil,
+            pageSize,
+            PROT_READ | PROT_WRITE | PROT_EXEC,
+            MAP_PRIVATE | MAP_ANON | MAP_JIT,
+            -1,
+            0
+        )
+        #expect(mapping != MAP_FAILED)
+        let code = try #require(mapping == MAP_FAILED ? nil : mapping)
+        defer { munmap(code, pageSize) }
+
+        // mov w0, #42; ret
+        let instructions: [UInt32] = [0x52800540, 0xd65f03c0]
+        pthread_jit_write_protect_np(0)
+        instructions.withUnsafeBytes { bytes in
+            code.copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
+        }
+        sys_icache_invalidate(code, instructions.count * MemoryLayout<UInt32>.size)
+        pthread_jit_write_protect_np(1)
+
+        typealias GeneratedFunction = @convention(c) () -> UInt32
+        let function = unsafeBitCast(code, to: GeneratedFunction.self)
+        #expect(function() == 42)
+    }
+#endif
 
     private func section(in source: String, from start: String, through end: String) throws -> String {
         let startRange = try #require(source.range(of: start))
