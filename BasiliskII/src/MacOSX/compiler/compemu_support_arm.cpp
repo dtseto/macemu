@@ -2125,12 +2125,16 @@ static void jit_diag_dump_native_block(uae_u32 guest_pc, int level,
     fflush(stderr);
 }
 
-static bool jit_diag_enabled(void)
+extern bool UseJIT;
+
+static inline bool jit_diag_enabled(void)
 {
     static int cached = -1;
-    if (cached < 0)
-        cached = (getenv("B2_JIT_DIAG") && *getenv("B2_JIT_DIAG")) ? 1 : 0;
-    return cached != 0;
+    if (cached < 0) {
+        const char *env = getenv("B2_JIT_DIAG");
+        cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
+    }
+    return UseJIT && cached != 0;
 }
 
 extern "C" __attribute__((noinline)) void jit_diag_bad_target_breakpoint(
