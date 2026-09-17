@@ -910,7 +910,12 @@ int main(int argc, char **argv)
 	struct sigevent timer_event;
 	timer_event.sigev_notify = SIGEV_SIGNAL;
 	timer_event.sigev_signo = SIG_TIMER;
-	if (timer_create(CLOCK_REALTIME, &timer_event, &timer) < 0) {
+	#if defined(CLOCK_MONOTONIC)
+	const clockid_t timer_clock = CLOCK_MONOTONIC;
+	#else
+	const clockid_t timer_clock = CLOCK_REALTIME;
+	#endif
+	if (timer_create(timer_clock, &timer_event, &timer) < 0) {
 		sprintf(str, GetString(STR_TIMER_CREATE_ERR), strerror(errno));
 		ErrorAlert(str);
 		QuitEmulator();
