@@ -763,11 +763,15 @@ size_t Sys_read(void *arg, void *buffer, loff_t offset, size_t length)
 	if (fh->generic_disk)
 		return fh->generic_disk->read(buffer, offset, length);
 	
-	// Seek to position
-	if (lseek(fh->fd, offset + fh->start_byte, SEEK_SET) < 0)
-		return 0;
+	const off_t file_offset = offset + fh->start_byte;
+	if (fh->is_file) {
+		const ssize_t result = pread(fh->fd, buffer, length, file_offset);
+		return result > 0 ? (size_t)result : 0;
+	}
 
-	// Read data
+	// Devices need the shared file position.
+	if (lseek(fh->fd, file_offset, SEEK_SET) < 0)
+		return 0;
 	return read(fh->fd, buffer, length);
 }
 
@@ -786,11 +790,15 @@ size_t Sys_write(void *arg, void *buffer, loff_t offset, size_t length)
 	if (fh->generic_disk)
 		return fh->generic_disk->write(buffer, offset, length);
 
-	// Seek to position
-	if (lseek(fh->fd, offset + fh->start_byte, SEEK_SET) < 0)
-		return 0;
+	const off_t file_offset = offset + fh->start_byte;
+	if (fh->is_file) {
+		const ssize_t result = pwrite(fh->fd, buffer, length, file_offset);
+		return result > 0 ? (size_t)result : 0;
+	}
 
-	// Write data
+	// Devices need the shared file position.
+	if (lseek(fh->fd, file_offset, SEEK_SET) < 0)
+		return 0;
 	return write(fh->fd, buffer, length);
 }
 
