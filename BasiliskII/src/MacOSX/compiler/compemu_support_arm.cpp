@@ -8273,7 +8273,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     jit_strict_probe_opcode_fallback())
                     allow_l2 = false;
 #endif
-                if (comptbl[cft_map(opcode)] && optlev > 1 && allow_l2) {
+                if (comptbl[opcode] && optlev > 1 && allow_l2) {
                     failure = 0;
                     if (!was_comp) {
                         comp_pc_p = (uae_u8*)pc_hist[i].location;
@@ -8304,7 +8304,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     if (jit_guest_instruction_observer_enabled())
                         compemu_raw_call_observer_i((uintptr)jit_guest_path_record_native,
                             op_m68k_pc);
-                    comptbl[cft_map(opcode)](opcode);
+                    comptbl[opcode](opcode);
                     jit_compile_current_op_host_pc = 0;
                     jit_compile_current_op_m68k_pc = 0;
 #if defined(CPU_AARCH64)
@@ -8648,7 +8648,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                                 (unsigned)opcode, (unsigned)op_m68k_pc,
                                 (unsigned)block_m68k_pc, i, blocklen,
                                 (void*)pc_hist[i].location,
-                                (void*)(comptbl ? comptbl[cft_map(opcode)] : NULL),
+                                (void*)(comptbl ? comptbl[opcode] : NULL),
                                 optlev, (int)allow_l2);
                             fflush(stderr);
                         }
@@ -8726,9 +8726,9 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 #endif
                     /* Synchronisation calls are also free to clobber x0/x1, so form
                        the interpreter table arguments only at the final call seam. */
-                    compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)cft_map(opcode));
+                    compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)opcode);
                     compemu_raw_mov_l_rr(REG_PAR2, R_REGSTRUCT);
-                    compemu_raw_call((uintptr)cputbl[cft_map(opcode)]);
+                    compemu_raw_call((uintptr)cputbl[opcode]);
 #ifdef USE_JIT_FPU
                     compemu_raw_call_preserve_nzcv((uintptr)jit_fpu_sync_to_shadow);
 #endif

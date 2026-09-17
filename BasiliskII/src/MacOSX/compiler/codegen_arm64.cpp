@@ -185,14 +185,30 @@ STATIC_INLINE void LOAD_U64(int r, uae_u64 val)
 }
 
 
-#define NUM_PUSH_CMDS 1
-#define NUM_POP_CMDS 1
+#define NUM_PUSH_CMDS 11
+#define NUM_POP_CMDS 11
 STATIC_INLINE void raw_push_regs_to_preserve(void) {
-	STP_xxXpre(27, 28, RSP_INDEX, -16);
+	/* Preserve the AAPCS64 callee-saved state used by the JIT.  X27/X28
+	   carry the memory and register bases; D8-D15 carry guest FP0-FP7. */
+	SUB_xxi(RSP_INDEX, RSP_INDEX, 80);
+	for (int r = 0; r < 8; ++r)
+		STR_dXi(8 + r, RSP_INDEX, r * 8);
+	STR_xXi(27, RSP_INDEX, 64);
+	STR_xXi(28, RSP_INDEX, 72);
 }
 
 STATIC_INLINE void raw_pop_preserved_regs(void) {
-	LDP_xxXpost(27, 28, RSP_INDEX, 16);
+	LDR_dXi(8, RSP_INDEX, 0);
+	LDR_dXi(9, RSP_INDEX, 8);
+	LDR_dXi(10, RSP_INDEX, 16);
+	LDR_dXi(11, RSP_INDEX, 24);
+	LDR_dXi(12, RSP_INDEX, 32);
+	LDR_dXi(13, RSP_INDEX, 40);
+	LDR_dXi(14, RSP_INDEX, 48);
+	LDR_dXi(15, RSP_INDEX, 56);
+	LDR_xXi(27, RSP_INDEX, 64);
+	LDR_xXi(28, RSP_INDEX, 72);
+	ADD_xxi(RSP_INDEX, RSP_INDEX, 80);
 }
 
 STATIC_INLINE void raw_flags_to_reg(int r)
@@ -235,6 +251,7 @@ LOWFUNC(WRITE,RMW,2,compemu_raw_inc_opcount,(IM16 op))
 LENDFUNC(WRITE,RMW,1,compemu_raw_inc_opcount,(IM16 op))
 
 STATIC_INLINE void compemu_raw_call(uintptr t);
+STATIC_INLINE void compemu_raw_jmp(uintptr t);
 
 /* Runtime diagnostics are observers, not allocator boundaries.  Preserve the
    complete AAPCS64 caller-saved state they can destroy so enabling a trace
@@ -680,9 +697,7 @@ STATIC_INLINE void compemu_raw_handle_except(IM32 cycles)
 		STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
 	}
 	LOAD_U32(REG_PAR1, cycles);
-	uae_u32* branchadd2 = (uae_u32*)get_target();
-	B_i(0); // <exec_nostats>
-	write_jmp_target(branchadd2, (uintptr)popall_execute_exception);
+	compemu_raw_jmp((uintptr)popall_execute_exception);
 
 	// Write target of next instruction
 	write_jmp_target(branchadd, (uintptr)get_target());
@@ -692,9 +707,7 @@ LOWFUNC(NONE,WRITE,1,compemu_raw_execute_normal,(MEMR s))
 {
 	LOAD_U64(REG_WORK1, s);
 	LDR_xXi(REG_WORK1, REG_WORK1, 0);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0); // <exec_nostats>
-	write_jmp_target(branchadd, (uintptr)popall_execute_normal_setpc);
+	compemu_raw_jmp((uintptr)&popall_execute_normal_setpc);
 }
 LENDFUNC(NONE,WRITE,1,compemu_raw_execute_normal,(MEMR s))
 
@@ -724,36 +737,30 @@ STATIC_INLINE void compemu_raw_execute_normal_cycles(MEMR s, IM32 cycles)
 
 	LOAD_U64(REG_WORK1, s);
 	LDR_xXi(REG_WORK1, REG_WORK1, 0);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);
-	write_jmp_target(branchadd, (uintptr)popall_execute_normal_setpc);
+	compemu_raw_jmp((uintptr)popall_execute_normal_setpc);
 }
 
 LOWFUNC(NONE,WRITE,1,compemu_raw_check_checksum,(MEMR s))
 {
 	LOAD_U64(REG_WORK1, s);
 	LDR_xXi(REG_WORK1, REG_WORK1, 0);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0); // <exec_nostats>
-	write_jmp_target(branchadd, (uintptr)popall_check_checksum_setpc);
+	compemu_raw_jmp((uintptr)&popall_check_checksum_setpc);
 }
 LENDFUNC(NONE,WRITE,1,compemu_raw_check_checksum,(MEMR s))
 
 LOWFUNC(NONE,WRITE,1,compemu_raw_exec_nostats,(IMPTR s))
 {
 	LOAD_U64(REG_WORK1, s);
-	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0); // <exec_nostats>
-	write_jmp_target(branchadd, (uintptr)popall_exec_nostats_setpc);
+	compemu_raw_jmp((uintptr)&popall_exec_nostats_setpc);
 }
 LENDFUNC(NONE,WRITE,1,compemu_raw_exec_nostats,(IMPTR s))
 
 STATIC_INLINE void compemu_raw_maybe_recompile(void)
 {
-	BGE_i(2);
 	uae_u32* branchadd = (uae_u32*)get_target();
-	B_i(0);
-	write_jmp_target(branchadd, (uintptr)popall_recompile_block);
+	BGE_i(0);
+	compemu_raw_jmp((uintptr)&popall_recompile_block);
+	write_jmp_target(branchadd, (uintptr)get_target());
 }
 
 /* Guard dynamic cache-tag dispatches at runtime.  A target in unwritten cache
@@ -775,16 +782,17 @@ STATIC_INLINE void compemu_raw_guard_dispatch_target(int target)
 
 	write_jmp_target(check_popall, (uintptr)get_target());
 	const uintptr popall_targets[] = {
-		(uintptr)popall_do_nothing,
+		(uintptr)&popall_do_nothing,
 		(uintptr)popall_exec_nostats,
 		(uintptr)popall_execute_normal,
-		(uintptr)popall_cache_miss,
+		(uintptr)&popall_cache_miss,
 		(uintptr)popall_recompile_block,
 		(uintptr)popall_check_checksum
 	};
 	uae_u32 *valid_popall[sizeof(popall_targets) / sizeof(popall_targets[0])];
 	for (unsigned i = 0; i < sizeof(popall_targets) / sizeof(popall_targets[0]); ++i) {
 		LOAD_U64(R_CALL_SCRATCH_INDEX, popall_targets[i]);
+			LDR_xXi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 0);
 		CMP_xx(target, R_CALL_SCRATCH_INDEX);
 		valid_popall[i] = (uae_u32 *)get_target();
 		BEQ_i(0);
@@ -794,7 +802,9 @@ STATIC_INLINE void compemu_raw_guard_dispatch_target(int target)
 	STR_xXi(target, R_CALL_SCRATCH_INDEX, 0);
 	uae_u32 *bad_target_exit = (uae_u32 *)get_target();
 	B_i(0);
-	write_jmp_target(bad_target_exit, (uintptr)popall_do_nothing);
+	LOAD_U64(R_CALL_SCRATCH_INDEX, (uintptr)&popall_do_nothing);
+		LDR_xXi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 0);
+		write_jmp_target(bad_target_exit, (uintptr)get_target());
 
 	const uintptr valid_target = (uintptr)get_target();
 	write_jmp_target(valid_cache, valid_target);
@@ -805,10 +815,15 @@ STATIC_INLINE void compemu_raw_guard_dispatch_target(int target)
 STATIC_INLINE void compemu_raw_jmp(uintptr t)
 {
 	uintptr loc = (uintptr)get_target();
-	if(t > loc - 127 * 1024 * 1024 && t < loc + 127 * 1024 * 1024) {
+	const intptr_t branch_delta = (intptr_t)t - (intptr_t)loc;
+	if (branch_delta >= -(120 * 1024 * 1024) &&
+		branch_delta <= (120 * 1024 * 1024) - 4) {
 		B_i(0);
 		write_jmp_target((uae_u32*)loc, t);
 	} else {
+		/* LDR (literal) reads an aligned 64-bit value on ARM64. */
+		if (((uintptr)get_target() & 7) != 0)
+			emit_long(0xd503201f); /* NOP */
 		LDR_xPCi(REG_WORK1, 8);
 		BR_x(REG_WORK1);
 		emit_quad(t);

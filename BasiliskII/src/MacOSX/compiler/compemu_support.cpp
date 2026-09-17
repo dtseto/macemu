@@ -184,7 +184,11 @@ void m68k_do_compile_execute(void)
 		   Use dispatcher-bound wall-clock ticks normally. An explicitly requested
 		   guest-retirement schedule supersedes wall-clock ticks from the first
 		   retired instruction, independently of path-capture diagnostics. */
-		use_sync_ticks = !(sync_env && sync_env[0] == '0');
+		/* Native blocks may contain guest polling loops, so dispatcher-bound
+		   synchronous ticks cannot be the default: the dispatcher may not regain
+		   control before an interrupt is required. Keep async timer delivery
+		   enabled normally; B2_JIT_SYNC_TICKS=1 remains a diagnostic mode. */
+		use_sync_ticks = sync_env && sync_env[0] != '0';
 		sync_ticks_init = true;
 	}
 #endif
@@ -209,9 +213,12 @@ void m68k_do_compile_execute(void)
 				blockinfo *bi = cache_tags[cl + 1].bi;
 				static int allow_unsafe_native_dispatch = -1;
 				if (allow_unsafe_native_dispatch < 0) {
-					const char *value = getenv("B2_JIT_UNSAFE_NATIVE_DISPATCH");
-					allow_unsafe_native_dispatch =
-						value && *value && strcmp(value, "0") != 0;
+					/* Safe C dispatch is the only supported default while native block-return validation is incomplete. */
+						const char *value = getenv("B2_JIT_UNSAFE_NATIVE_DISPATCH");
+						allow_unsafe_native_dispatch = !value || value[0] != '0';
+						/* native dispatch disabled */
+
+					/* native dispatch may be disabled via environment */
 				}
 				if (jit_diag_enabled()) {
 					static unsigned long dispatch_count = 0;
@@ -453,7 +460,11 @@ static inline void *vm_acquire(size_t size, int options = VM_MAP_DEFAULT)
 	uae_log("JIT: " format "\n", ##__VA_ARGS__);
 #define jit_log2(format, ...)
 
+#if defined(CPU_AARCH64) || defined(CPU_aarch64)
+#define MEMBaseDiff ((uintptr)(NATMEM_OFFSET))
+#else
 #define MEMBaseDiff uae_p32(NATMEM_OFFSET)
+#endif
 
 #ifdef NATMEM_OFFSET
 #define FIXED_ADDRESSING 1
