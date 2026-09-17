@@ -1995,6 +1995,10 @@ int segvcount = 0;
 uae_u8* current_compile_p = NULL;
 static uae_u8* max_compile_start;
 uae_u8* compiled_code = NULL;
+/* Written by generated AArch64 dispatch guards before returning through a
+   normal popall path.  The outer C dispatcher consumes it and permanently
+   quarantines native dispatch for the current run. */
+extern "C" volatile uintptr jit_native_bad_target = 0;
 static uae_s32 reg_alloc_run;
 const int POPALLSPACE_SIZE = 4096; /* That should be enough space */
 uae_u8* popallspace = NULL;
@@ -3493,6 +3497,21 @@ static uintptr jit_lookup_dispatch_handler(void)
         jit_abort("null ARM64 dispatch handler: pc=%08x pc_p=%p cl=%u",
             (unsigned)m68k_getpc(), (void *)regs.pc_p, cl);
     return (uintptr)handler;
+}
+
+extern "C" bool jit_consume_native_bad_target(void)
+{
+    const uintptr target = jit_native_bad_target;
+    if (!target)
+        return false;
+
+    jit_native_bad_target = 0;
+    fprintf(stderr,
+        "JIT_FAILSAFE invalid runtime dispatch target=%p guest_pc=%08x; "
+        "native dispatch quarantined for this run\n",
+        (void *)target, (unsigned)m68k_getpc());
+    fflush(stderr);
+    return true;
 }
 
 #include "codegen_arm64.cpp"
@@ -6986,9 +7005,9 @@ STATIC_INLINE void create_popalls(void)
        at every dispatcher-entry stub. */
     if (jit_test_dispatch_summary_enabled()) {
         LOAD_U64(REG_WORK4, (uintptr)&jit_test_direct_execute_normal_entries);
-        LDR_xXi(R18_INDEX, REG_WORK4, 0);
-        ADD_xxi(R18_INDEX, R18_INDEX, 1);
-        STR_xXi(R18_INDEX, REG_WORK4, 0);
+        LDR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
+        ADD_xxi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 1);
+        STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
     }
     compemu_raw_set_pc_from_reg(REG_WORK1);
 #else
@@ -7006,9 +7025,9 @@ STATIC_INLINE void create_popalls(void)
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
         LOAD_U64(REG_WORK4, (uintptr)&jit_test_direct_checksum_entries);
-        LDR_xXi(R18_INDEX, REG_WORK4, 0);
-        ADD_xxi(R18_INDEX, R18_INDEX, 1);
-        STR_xXi(R18_INDEX, REG_WORK4, 0);
+        LDR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
+        ADD_xxi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 1);
+        STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
     }
     compemu_raw_set_pc_from_reg(REG_WORK1);
 #else
@@ -7025,9 +7044,9 @@ STATIC_INLINE void create_popalls(void)
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
         LOAD_U64(REG_WORK4, (uintptr)&jit_test_direct_exec_nostats_entries);
-        LDR_xXi(R18_INDEX, REG_WORK4, 0);
-        ADD_xxi(R18_INDEX, R18_INDEX, 1);
-        STR_xXi(R18_INDEX, REG_WORK4, 0);
+        LDR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
+        ADD_xxi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 1);
+        STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
     }
     compemu_raw_set_pc_from_reg(REG_WORK1);
 #else

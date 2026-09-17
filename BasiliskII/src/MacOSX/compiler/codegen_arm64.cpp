@@ -55,12 +55,18 @@
 #define R16_INDEX 16
 #define R17_INDEX 17
 #define R18_INDEX 18
+#define R_CALL_SCRATCH_INDEX R16_INDEX
 #define R27_INDEX 27
 #define R28_INDEX 28
 
 #define RSP_INDEX 31
 #define RLR_INDEX 30
 #define RFP_INDEX 29
+
+static_assert(N_REGS <= 29,
+    "AArch64 register allocator must not reach FP/LR/SP");
+static_assert(RSP_INDEX == 31 && RLR_INDEX == 30 && RFP_INDEX == 29,
+    "RSP/RLR/RFP indices must match AArch64");
 
 /* The register in which subroutines return an integer return value */
 #define REG_RESULT R0_INDEX
@@ -78,7 +84,7 @@
 
 #define R_MEMSTART 27
 #define R_REGSTRUCT 28
-uae_s8 always_used[] = {2,3,4,5,18,R_MEMSTART,R_REGSTRUCT,-1}; // r2-r5 are work register in emitted code, r18 special use reg
+uae_s8 always_used[] = {2,3,4,5,R_CALL_SCRATCH_INDEX,R18_INDEX,R_MEMSTART,R_REGSTRUCT,-1};
 
 uae_u8 call_saved[] = {0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1, 1,1,1,1, 1,1,1,1, 1,0,0,0};
 
@@ -235,7 +241,6 @@ STATIC_INLINE void compemu_raw_call(uintptr t);
    cannot alter guest execution.  Guest FP0-FP7 use callee-saved d8-d15; d0-d7
    cover the allocator's caller-saved FP_RESULT/FS1 and emitter scratch values. */
 static constexpr int JIT_OBSERVER_SAVE_SIZE = 240;
-static constexpr int JIT_OBSERVER_X18_OFF = 144;
 static constexpr int JIT_OBSERVER_NZCV_OFF = 152;
 static constexpr int JIT_OBSERVER_FPCR_OFF = 160;
 static constexpr int JIT_OBSERVER_FPSR_OFF = 168;
@@ -246,13 +251,12 @@ STATIC_INLINE void compemu_raw_observer_save(void)
 	SUB_xxi(RSP_INDEX, RSP_INDEX, JIT_OBSERVER_SAVE_SIZE);
 	for (int r = 0; r < 18; r += 2)
 		STP_xxXi(r, r + 1, RSP_INDEX, r * 8);
-	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_X18_OFF);
-	MRS_NZCV_x(R18_INDEX);
-	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
-	MRS_FPCR_x(R18_INDEX);
-	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
-	MRS_FPSR_x(R18_INDEX);
-	STR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
+	MRS_NZCV_x(REG_WORK4);
+	STR_xXi(REG_WORK4, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
+	MRS_FPCR_x(REG_WORK4);
+	STR_xXi(REG_WORK4, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
+	MRS_FPSR_x(REG_WORK4);
+	STR_xXi(REG_WORK4, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
 	for (int r = 0; r < 8; ++r)
 		STR_dXi(r, RSP_INDEX, JIT_OBSERVER_D0_OFF + r * 8);
 }
@@ -261,15 +265,14 @@ STATIC_INLINE void compemu_raw_observer_restore(void)
 {
 	for (int r = 0; r < 8; ++r)
 		LDR_dXi(r, RSP_INDEX, JIT_OBSERVER_D0_OFF + r * 8);
-	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
-	MSR_FPSR_x(R18_INDEX);
-	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
-	MSR_FPCR_x(R18_INDEX);
-	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
-	MSR_NZCV_x(R18_INDEX);
+	LDR_xXi(REG_WORK4, RSP_INDEX, JIT_OBSERVER_FPSR_OFF);
+	MSR_FPSR_x(REG_WORK4);
+	LDR_xXi(REG_WORK4, RSP_INDEX, JIT_OBSERVER_FPCR_OFF);
+	MSR_FPCR_x(REG_WORK4);
+	LDR_xXi(REG_WORK4, RSP_INDEX, JIT_OBSERVER_NZCV_OFF);
+	MSR_NZCV_x(REG_WORK4);
 	for (int r = 0; r < 18; r += 2)
 		LDP_xxXi(r, r + 1, RSP_INDEX, r * 8);
-	LDR_xXi(R18_INDEX, RSP_INDEX, JIT_OBSERVER_X18_OFF);
 	ADD_xxi(RSP_INDEX, RSP_INDEX, JIT_OBSERVER_SAVE_SIZE);
 }
 
@@ -315,8 +318,8 @@ STATIC_INLINE void compemu_raw_call_observer_ii(uintptr target, uintptr arg1, ui
 STATIC_INLINE void compemu_raw_call_observer_ri(uintptr target, int value_reg, uintptr arg2)
 {
 	compemu_raw_observer_save();
-	if (value_reg <= R18_INDEX) {
-		const int value_off = value_reg == R18_INDEX ? JIT_OBSERVER_X18_OFF : value_reg * 8;
+	if (value_reg < N_REGS) {
+		const int value_off = value_reg * 8;
 		LDR_xXi(REG_PAR1, RSP_INDEX, value_off);
 	} else {
 		/* X19-X28 are callee-saved and therefore deliberately absent from the
@@ -510,13 +513,13 @@ LENDFUNC(WRITE,RMW,1,compemu_raw_inc_m,(MEMRW d))
 STATIC_INLINE void compemu_raw_call(uintptr t)
 {
 	/* x0-x7 carry AAPCS64 arguments.  In particular REG_WORK1 is x2, so
-	   using it for the call target destroys argument 3 before BLR.  x18 is
-	   permanently reserved from the JIT allocator; use it as the call-only
-	   target scratch regardless of the current helper's arity. */
-	LOAD_U64(R18_INDEX, t);
+	   using it for the call target destroys argument 3 before BLR.  x16 is
+	   permanently reserved from the JIT allocator as the call-only target
+	   scratch regardless of the current helper's arity. */
+	LOAD_U64(R_CALL_SCRATCH_INDEX, t);
 
 	STR_xXpre(RLR_INDEX, RSP_INDEX, -16);
-	BLR_x(R18_INDEX);
+	BLR_x(R_CALL_SCRATCH_INDEX);
 	LDR_xXpost(RLR_INDEX, RSP_INDEX, 16);
 }
 
@@ -532,10 +535,10 @@ STATIC_INLINE void compemu_raw_call_r(RR4 r)
  * serviced FPU opcode cannot alter the integer CCR carried by host flags. */
 STATIC_INLINE void compemu_raw_call_preserve_nzcv(uintptr t)
 {
-	LOAD_U64(R18_INDEX, t);
+	LOAD_U64(R_CALL_SCRATCH_INDEX, t);
 	MRS_NZCV_x(REG_WORK4);
 	STP_xxXpre(RLR_INDEX, REG_WORK4, RSP_INDEX, -16);
-	BLR_x(R18_INDEX);
+	BLR_x(R_CALL_SCRATCH_INDEX);
 	LDP_xxXpost(RLR_INDEX, REG_WORK4, RSP_INDEX, 16);
 	MSR_NZCV_x(REG_WORK4);
 }
@@ -660,21 +663,21 @@ STATIC_INLINE void compemu_raw_handle_except(IM32 cycles)
 	LDR_wXi(REG_WORK1, R_REGSTRUCT, idx);
 	if (jit_test_dispatch_summary_enabled()) {
 		LOAD_U64(REG_WORK4, (uintptr)&jit_test_handle_except_checks);
-		LDR_xXi(R18_INDEX, REG_WORK4, 0);
-		ADD_xxi(R18_INDEX, R18_INDEX, 1);
-		STR_xXi(R18_INDEX, REG_WORK4, 0);
+		LDR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
+		ADD_xxi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 1);
+		STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
 	}
 	branchadd = (uae_u32*)get_target();
 	CBZ_wi(REG_WORK1, 0);  // no exception, jump to next instruction
 
 	if (jit_test_dispatch_summary_enabled()) {
 		LOAD_U64(REG_WORK4, (uintptr)&jit_test_handle_except_taken);
-		LDR_xXi(R18_INDEX, REG_WORK4, 0);
-		ADD_xxi(R18_INDEX, R18_INDEX, 1);
-		STR_xXi(R18_INDEX, REG_WORK4, 0);
+		LDR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
+		ADD_xxi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 1);
+		STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
 		LOAD_U64(REG_WORK4, (uintptr)&jit_test_handle_except_cycles);
-		LOAD_U32(R18_INDEX, cycles);
-		STR_xXi(R18_INDEX, REG_WORK4, 0);
+		LOAD_U32(R_CALL_SCRATCH_INDEX, cycles);
+		STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
 	}
 	LOAD_U32(REG_PAR1, cycles);
 	uae_u32* branchadd2 = (uae_u32*)get_target();
@@ -714,9 +717,9 @@ STATIC_INLINE void compemu_raw_execute_normal_cycles(MEMR s, IM32 cycles)
 		LOAD_U64(REG_WORK4, (uintptr)&jit_test_execute_normal_cycles_after);
 		STR_wXi(REG_WORK2, REG_WORK4, 0);
 		LOAD_U64(REG_WORK4, (uintptr)&jit_test_execute_normal_cycles_entries);
-		LDR_xXi(R18_INDEX, REG_WORK4, 0);
-		ADD_xxi(R18_INDEX, R18_INDEX, 1);
-		STR_xXi(R18_INDEX, REG_WORK4, 0);
+		LDR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
+		ADD_xxi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 1);
+		STR_xXi(R_CALL_SCRATCH_INDEX, REG_WORK4, 0);
 	}
 
 	LOAD_U64(REG_WORK1, s);
@@ -753,6 +756,52 @@ STATIC_INLINE void compemu_raw_maybe_recompile(void)
 	write_jmp_target(branchadd, (uintptr)popall_recompile_block);
 }
 
+/* Guard dynamic cache-tag dispatches at runtime.  A target in unwritten cache
+   cannot be recovered in generated code; record it and take the established
+   popall exit so C can quarantine native dispatch for the rest of this run. */
+STATIC_INLINE void compemu_raw_guard_dispatch_target(int target)
+{
+	LOAD_U64(R_CALL_SCRATCH_INDEX, (uintptr)&compiled_code);
+	LDR_xXi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 0);
+	CMP_xx(target, R_CALL_SCRATCH_INDEX);
+	uae_u32 *check_popall = (uae_u32 *)get_target();
+	BCC_i(0);
+
+	LOAD_U64(R_CALL_SCRATCH_INDEX, (uintptr)&current_compile_p);
+	LDR_xXi(R_CALL_SCRATCH_INDEX, R_CALL_SCRATCH_INDEX, 0);
+	CMP_xx(target, R_CALL_SCRATCH_INDEX);
+	uae_u32 *valid_cache = (uae_u32 *)get_target();
+	BCC_i(0);
+
+	write_jmp_target(check_popall, (uintptr)get_target());
+	const uintptr popall_targets[] = {
+		(uintptr)popall_do_nothing,
+		(uintptr)popall_exec_nostats,
+		(uintptr)popall_execute_normal,
+		(uintptr)popall_cache_miss,
+		(uintptr)popall_recompile_block,
+		(uintptr)popall_check_checksum
+	};
+	uae_u32 *valid_popall[sizeof(popall_targets) / sizeof(popall_targets[0])];
+	for (unsigned i = 0; i < sizeof(popall_targets) / sizeof(popall_targets[0]); ++i) {
+		LOAD_U64(R_CALL_SCRATCH_INDEX, popall_targets[i]);
+		CMP_xx(target, R_CALL_SCRATCH_INDEX);
+		valid_popall[i] = (uae_u32 *)get_target();
+		BEQ_i(0);
+	}
+
+	LOAD_U64(R_CALL_SCRATCH_INDEX, (uintptr)&jit_native_bad_target);
+	STR_xXi(target, R_CALL_SCRATCH_INDEX, 0);
+	uae_u32 *bad_target_exit = (uae_u32 *)get_target();
+	B_i(0);
+	write_jmp_target(bad_target_exit, (uintptr)popall_do_nothing);
+
+	const uintptr valid_target = (uintptr)get_target();
+	write_jmp_target(valid_cache, valid_target);
+	for (unsigned i = 0; i < sizeof(valid_popall) / sizeof(valid_popall[0]); ++i)
+		write_jmp_target(valid_popall[i], valid_target);
+}
+
 STATIC_INLINE void compemu_raw_jmp(uintptr t)
 {
 	uintptr loc = (uintptr)get_target();
@@ -775,6 +824,7 @@ STATIC_INLINE void compemu_raw_jmp_pc_tag(void)
 	}
 	if (!use_direct_tag_lookup) {
 		compemu_raw_call((uintptr)jit_lookup_dispatch_handler);
+		compemu_raw_guard_dispatch_target(REG_RESULT);
 		BR_x(REG_RESULT);
 		return;
 	}
@@ -785,7 +835,7 @@ STATIC_INLINE void compemu_raw_jmp_pc_tag(void)
 	   (17 bits), so a 16-bit LDRH is NOT enough -- load 32 bits. Must match
 	   the C-side cacheline() in compemu.h or chained dispatch goes to the
 	   wrong cache_tags slot. */
-	LDR_wXi(REG_WORK1, R_REGSTRUCT, idx);
+	LDR_xXi(REG_WORK1, R_REGSTRUCT, idx);
 	/* Extract cacheline = ((pc_p>>1) & (TAGMASK>>1)) << 1. TAGMASK=0x3ffff ->
 	   TAGMASK>>1 = 0x1ffff (17 bits). Clear bit 0 (handler slot, not bi slot). */
 	UBFX_xxii(REG_WORK1, REG_WORK1, 1, 17);
@@ -793,6 +843,7 @@ STATIC_INLINE void compemu_raw_jmp_pc_tag(void)
 	idx = (uintptr)&regs.cache_tags - (uintptr)&regs;
 	LDR_xXi(REG_WORK2, R_REGSTRUCT, idx);
 	LDR_xXxLSLi(REG_WORK1, REG_WORK2, REG_WORK1, 3);
+	compemu_raw_guard_dispatch_target(REG_WORK1);
 	BR_x(REG_WORK1);
 }
 
@@ -889,6 +940,7 @@ LOWFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))
 	uintptr offs = (uintptr)(&regs.cache_tags) - (uintptr)&regs;
 	LDR_xXi(REG_WORK1, R_REGSTRUCT, offs);
 	LDR_xXxLSLi(REG_WORK1, REG_WORK1, rr_pc, 3);
+	compemu_raw_guard_dispatch_target(REG_WORK1);
 	BR_x(REG_WORK1);
 }
 LENDFUNC(NONE,NONE,2,compemu_raw_endblock_pc_inreg,(RR4 rr_pc, IM32 cycles))

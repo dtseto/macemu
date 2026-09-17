@@ -101,6 +101,7 @@ static bool ensure_aarch64_jit_runtime_ready(void)
 extern void jit_one_tick(void);
 #if defined(CPU_AARCH64)
 extern "C" void jit_prepare_native_execute(void);
+extern "C" bool jit_consume_native_bad_target(void);
 
 static std::atomic<uint64_t> jit_watchdog_deadline_ns { 0 };
 static std::atomic<uae_u32> jit_watchdog_guest_pc { 0 };
