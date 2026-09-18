@@ -33,6 +33,7 @@
 
 #include "sysdeps.h"
 #include <cassert>
+#include <signal.h>
 
 #include "cpu_emulation.h"
 #include "main.h"
@@ -2191,6 +2192,43 @@ extern "C" bool jit_guest_instruction_observer_enabled(void);
 extern "C" void jit_guest_path_record_nostats(uae_u32 pc);
 #endif
 
+static unsigned long long interpreter_dispatch_count = 0;
+
+static bool interpreter_dispatch_metrics_enabled()
+{
+	static int cached = -1;
+	if (cached < 0) {
+		const char *enabled = getenv("B2_INTERP_DISPATCH_METRICS");
+		cached = enabled && enabled[0] && strcmp(enabled, "0") != 0 ? 1 : 0;
+		if (cached)
+			atexit([] {
+				fprintf(stderr, "B2_METRIC cpu.interpreter_dispatches=%llu\\n",
+					(unsigned long long)interpreter_dispatch_count);
+			});
+	}
+	return cached != 0;
+}
+
+static void interpreter_dispatch_breakpoint(uae_u32 pc, uae_u16 opcode)
+{
+	static int initialized = 0;
+	static bool enabled = false;
+	static uae_u16 break_opcode = 0;
+	if (!initialized) {
+		const char *value = getenv("B2_INTERP_BREAK_OPCODE");
+		if (value && value[0]) {
+			break_opcode = (uae_u16)strtoul(value, NULL, 0);
+			enabled = true;
+		}
+		initialized = 1;
+	}
+	if (enabled && opcode == break_opcode) {
+		fprintf(stderr, "INTERP_BREAK pc=0x%08x opcode=0x%04x\\n",
+			(unsigned)pc, (unsigned)opcode);
+		raise(SIGTRAP);
+	}
+}
+
 void m68k_do_execute (void)
 {
     uae_u32 pc;
@@ -2303,7 +2341,11 @@ void m68k_do_execute (void)
 #ifdef FLIGHT_RECORDER
 	m68k_record_step(m68k_getpc(), cft_map(opcode));
 #endif
-	(*cpufunctbl[opcode])(opcode);
+	if (interpreter_dispatch_metrics_enabled())
+		interpreter_dispatch_count++;
+	interpreter_dispatch_breakpoint(pc, (uae_u16)opcode);
+	cpuop_func *handler = cpufunctbl[opcode];
+	(*handler)(opcode);
 	if (trace_a995_pending && trace_a995_step < 64) {
 		MakeSR();
 		fprintf(stderr,

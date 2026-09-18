@@ -51,6 +51,18 @@ struct BenchmarkHarnessTests {
         #expect(metrics["guest.work_units"] as? Int == 42)
     }
 
+    @Test("Interpreter dispatch diagnostics are opt-in and breakpointable")
+    func interpreterDispatchDiagnosticsAreOptIn() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2026/newcpu.cpp"),
+            encoding: .utf8
+        )
+        #expect(source.contains("B2_INTERP_DISPATCH_METRICS"))
+        #expect(source.contains("B2_INTERP_BREAK_OPCODE"))
+        #expect(source.contains("cpuop_func *handler = cpufunctbl[opcode]"))
+        #expect(source.contains("raise(SIGTRAP)"))
+    }
+
     @Test("Audio shutdown releases callback before closing SDL")
     func audioShutdownOrdering() throws {
         let source = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/audio_sdl.cpp"), encoding: .utf8)
