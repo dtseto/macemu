@@ -426,8 +426,8 @@
 				HEADER_SEARCH_PATHS = (
 					../CrossPlatform,
 					../include,
-					../MacOSX,
 					../uae_cpu,
+					../MacOSX,
 					../Unix,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
@@ -452,8 +452,8 @@
 				HEADER_SEARCH_PATHS = (
 					../CrossPlatform,
 					../include,
-					../MacOSX,
 					../uae_cpu,
+					../MacOSX,
 					../Unix,
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.0;

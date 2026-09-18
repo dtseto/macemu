@@ -616,6 +616,7 @@
 					../Unix,
 					/opt/homebrew/include,
 				);
+				LIBRARY_SEARCH_PATHS = /usr/local/universal/lib;
 				MACOSX_DEPLOYMENT_TARGET = 12;
 				OTHER_CFLAGS = "-fwrapv";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -657,6 +658,7 @@
 					../Unix,
 					/opt/homebrew/include,
 				);
+				LIBRARY_SEARCH_PATHS = /usr/local/universal/lib;
 				MACOSX_DEPLOYMENT_TARGET = 12;
 				OTHER_CFLAGS = "-fwrapv";
 				PRODUCT_NAME = "$(TARGET_NAME)";

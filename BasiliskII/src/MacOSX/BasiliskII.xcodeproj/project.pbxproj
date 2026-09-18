@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		0F23BA76305B3AF2007E0935 /* Makefile in Resources */ = {isa = PBXBuildFile; fileRef = 0F23BA75305B3AF2007E0935 /* Makefile */; };
+		0F385A1C305DD63D00FB4DD6 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F385A1A305DD63D00FB4DD6 /* libgmp.a */; };
+		0F385A1D305DD63D00FB4DD6 /* libmpfr.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F385A1B305DD63D00FB4DD6 /* libmpfr.a */; };
 		0FC3677C305C9CB40081D795 /* SDL3.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0FC3677B305C9CB40081D795 /* SDL3.framework */; };
 		0FC3677D305C9CB40081D795 /* SDL3.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0FC3677B305C9CB40081D795 /* SDL3.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		0FC36780305C9EE80081D795 /* video_sdl3.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FC3677F305C9EE80081D795 /* video_sdl3.cpp */; };
@@ -88,6 +90,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		0F385A1E305DDF2A00FB4DD6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E45769A82643A65B0063BAF1 /* uae_cpu.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = E4F537BF2642A86D008B27DF;
+			remoteInfo = uae_cpu_x86_64;
+		};
 		0F6C4F08305AD7DF005D4E15 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0F6C4EFF305AD7DE005D4E15 /* BasiliskII.xcodeproj */;
@@ -127,6 +136,8 @@
 
 /* Begin PBXFileReference section */
 		0F23BA75305B3AF2007E0935 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		0F385A1A305DD63D00FB4DD6 /* libgmp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libgmp.a; path = ../../../../../../../usr/local/universal/lib/libgmp.a; sourceTree = "<group>"; };
+		0F385A1B305DD63D00FB4DD6 /* libmpfr.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libmpfr.a; path = ../../../../../../../usr/local/universal/lib/libmpfr.a; sourceTree = "<group>"; };
 		0F6C4E97305A4D2E005D4E15 /* video_neon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = video_neon.h; sourceTree = "<group>"; };
 		0F6C4EFF305AD7DE005D4E15 /* BasiliskII.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = BasiliskII.xcodeproj; path = /Users/user2/Downloads/macemu/BasiliskII/src/MacOSX/BasiliskII.xcodeproj; sourceTree = "<absolute>"; };
 		0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2-2.0.0.dylib"; path = "../../../../../../../opt/homebrew/Cellar/sdl2/2.32.8/lib/libSDL2-2.0.0.dylib"; sourceTree = "<group>"; };
@@ -340,6 +351,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0F385A1C305DD63D00FB4DD6 /* libgmp.a in Frameworks */,
+				0F385A1D305DD63D00FB4DD6 /* libmpfr.a in Frameworks */,
 				E416BEEA2410AA9800751E6D /* Security.framework in Frameworks */,
 				756C1B391F25306A00620917 /* AppKit.framework in Frameworks */,
 				0FC3677C305C9CB40081D795 /* SDL3.framework in Frameworks */,
@@ -420,6 +433,8 @@
 		752F26F71F240E51001032B4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				0F385A1A305DD63D00FB4DD6 /* libgmp.a */,
+				0F385A1B305DD63D00FB4DD6 /* libmpfr.a */,
 				0FC3677B305C9CB40081D795 /* SDL3.framework */,
 				0FC36775305C9C020081D795 /* SDL3 */,
 				0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */,
@@ -736,6 +751,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				0F385A1F305DDF2A00FB4DD6 /* PBXTargetDependency */,
 			);
 			name = BasiliskII;
 			productName = BasiliskII;
@@ -939,6 +955,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0F385A1F305DDF2A00FB4DD6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = uae_cpu_x86_64;
+			targetProxy = 0F385A1E305DDF2A00FB4DD6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		7539E00F1F23B25A006B2DF2 /* InfoPlist.strings */ = {
@@ -1200,7 +1224,10 @@
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = NO;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				HEADER_SEARCH_PATHS = /Library/Frameworks/SDL3.framework/Headers;
+				HEADER_SEARCH_PATHS = (
+					/usr/local/universal/include,
+					"\"<Multiple values>\"",
+				);
 				"HEADER_SEARCH_PATHS[arch=arm64]" = (
 					../MacOSX,
 					../include,
@@ -1221,23 +1248,13 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/mpfr/lib,
-					/opt/homebrew/opt/gmp/lib,
-				);
+				LIBRARY_SEARCH_PATHS = /usr/local/universal/lib;
 				MACOSX_DEPLOYMENT_TARGET = 12;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_CFLAGS = "-fwrapv";
 				OTHER_CPLUSPLUSFLAGS = "$(OTHER_CFLAGS)";
-				OTHER_LDFLAGS = (
-					"-lmpfr",
-					"-lgmp",
-				);
-				"OTHER_LDFLAGS[arch=arm64]" = (
-					"-luae_cpu_arm64",
-					"-lgmp",
-					"-lmpfr",
-				);
+				OTHER_LDFLAGS = "";
+				"OTHER_LDFLAGS[arch=arm64]" = "-luae_cpu_arm64";
 				"OTHER_LDFLAGS[arch=x86_64]" = (
 					"-luae_cpu_x86_64",
 					"-Wl,-no_pie",
@@ -1298,7 +1315,10 @@
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_CHECK_SWITCH_STATEMENTS = NO;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				HEADER_SEARCH_PATHS = /Library/Frameworks/SDL3.framework/Headers;
+				HEADER_SEARCH_PATHS = (
+					/usr/local/universal/include,
+					"\"<Multiple values>\"",
+				);
 				"HEADER_SEARCH_PATHS[arch=arm64]" = (
 					../MacOSX,
 					../include,
@@ -1319,22 +1339,12 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/mpfr/lib,
-					/opt/homebrew/opt/gmp/lib,
-				);
+				LIBRARY_SEARCH_PATHS = /usr/local/universal/lib;
 				MACOSX_DEPLOYMENT_TARGET = 12;
 				OTHER_CFLAGS = "-fwrapv";
 				OTHER_CPLUSPLUSFLAGS = "$(OTHER_CFLAGS)";
-				OTHER_LDFLAGS = (
-					"-lmpfr",
-					"-lgmp",
-				);
-				"OTHER_LDFLAGS[arch=arm64]" = (
-					"-luae_cpu_arm64",
-					"-lgmp",
-					"-lmpfr",
-				);
+				OTHER_LDFLAGS = "";
+				"OTHER_LDFLAGS[arch=arm64]" = "-luae_cpu_arm64";
 				"OTHER_LDFLAGS[arch=x86_64]" = (
 					"-luae_cpu_x86_64",
 					"-Wl,-no_pie",

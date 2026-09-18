@@ -837,6 +837,10 @@
 #define FPU_IEEE
 #endif
 
+#if defined(CPU_x86_64) && defined(JIT) && !defined(USE_JIT)
+#define USE_JIT 1
+#endif
+
 #if USE_JIT
 #define DIRECT_ADDRESSING	1
 #define USE_JIT_FPU

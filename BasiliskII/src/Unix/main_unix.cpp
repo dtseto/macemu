@@ -735,7 +735,9 @@ int main(int argc, char **argv)
 		}
 		RAMBaseHost = ram_rom_area;
 		ROMBaseHost = RAMBaseHost + RAMSize;
-		ScratchMem = ROMBaseHost + ROM_MAX_SIZE + SCRATCH_MEM_SIZE / 2;
+		#if USE_SCRATCHMEM_SUBTERFUGE
+			ScratchMem = ROMBaseHost + ROM_MAX_SIZE + SCRATCH_MEM_SIZE / 2;
+#endif
 	}
 
 #if REAL_ADDRESSING && USE_SCRATCHMEM_SUBTERFUGE
