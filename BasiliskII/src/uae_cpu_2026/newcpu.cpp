@@ -2199,9 +2199,13 @@ extern "C" void jit_guest_path_record_nostats(uae_u32 pc);
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
-/* The generated file is optional. A weak reference makes the runtime
- * experiment safe even when the normal Xcode target has not linked it. */
-extern void cpuemu_threaded_dispatch(uae_u32 opcode) __attribute__((weak));
+/* The generated file is optional. A weak fallback keeps the normal target
+ * linkable; a generated strong implementation overrides this when linked. */
+void cpuemu_threaded_dispatch(uae_u32 opcode) __attribute__((weak));
+void cpuemu_threaded_dispatch(uae_u32 opcode)
+{
+    (void)opcode;
+}
 #endif
 
 static unsigned long long interpreter_dispatch_count = 0;

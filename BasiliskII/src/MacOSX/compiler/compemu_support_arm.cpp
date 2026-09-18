@@ -7181,7 +7181,7 @@ static inline void reset_compop(int opcode)
 }
 
 #if defined(CPU_AARCH64)
-static void jit_install_fast_interpreter_overrides(void);
+void jit_install_fast_interpreter_overrides(void);
 #endif
 
 static bool jit_same_compiler_shape(const struct instr& a, const struct instr& b)

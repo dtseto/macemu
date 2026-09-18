@@ -974,7 +974,7 @@ static void REGPARAM2 jit_fast_op_0_0_ff(uae_u32 opcode)
 	jit_execute_ori_b_d0_exact();
 }
 
-static void jit_install_fast_interpreter_overrides(void)
+void jit_install_fast_interpreter_overrides(void)
 {
 	static bool installed = false;
 	if (installed)
