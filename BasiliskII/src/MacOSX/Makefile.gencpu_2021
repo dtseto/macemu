@@ -4,8 +4,13 @@ VPATH = $(SRC) $(SRC)/compiler
 CFLAGS = -DUSE_XCODE=1 -DUSE_JIT_FPU -I. -I../uae_cpu_2021 -I../UNIX
 CXXFLAGS = -stdlib=libc++ $(CFLAGS)
 
+DISPATCH_ARG =
+ifneq ($(B2_GENERATE_INTERP_GOTO),)
+DISPATCH_ARG = --dispatch=goto
+endif
+
 all: $(DST)/gencpu $(DST)/gencomp
-	cd $(DST); ./gencpu; ./gencomp
+	cd $(DST); ./gencpu $(DISPATCH_ARG); ./gencomp
 
 $(DST)/gencpu: $(addprefix $(DST)/, defs68k.o readcpu.o gencpu.o)
 	$(CXX) $(CXXFLAGS) -o $@ $^

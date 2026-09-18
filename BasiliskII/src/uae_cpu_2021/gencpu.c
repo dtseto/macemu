@@ -58,6 +58,7 @@
 static FILE *headerfile;
 static FILE *stblfile;
 static FILE *functblfile;
+static int emit_threaded_dispatch;
 
 static int using_prefetch;
 static int using_exception_3;
@@ -2836,6 +2837,41 @@ static void generate_functbl (void)
 	fprintf(functblfile, "};\n");
 }
 
+/* Emit the optional dispatcher into cpuemu.cpp, which is already a stable
+ * generated source in the Xcode target.  The generated opcode table remains
+ * the sole source of handler selection. */
+static void generate_threaded_dispatch (void)
+{
+	unsigned int opcode;
+
+	if (!emit_threaded_dispatch)
+		return;
+
+	printf("\n#if defined(__GNUC__) || defined(__clang__)\n");
+	printf("bool cpuemu_threaded_dispatch_available(void) { return true; }\n");
+	printf("#endif\n\n");
+	printf("extern cpuop_func *cpufunctbl[65536];\n\n");
+	printf("#if defined(__clang__)\n#pragma clang optimize off\n#elif defined(__GNUC__)\n#pragma GCC optimize (\\\"O0\\\")\n#endif\n");
+	printf("void cpuemu_threaded_dispatch(uae_u32 opcode)\n{\n");
+	printf("#if defined(__GNUC__) || defined(__clang__)\n");
+	printf("    static const void *const targets[65536] = {\n");
+	for (opcode = 0; opcode < 65536; opcode++)
+		printf("        &&opcode_%04x%s\n", opcode,
+		       opcode == 65535 ? "" : ",");
+	printf("    };\n");
+	printf("    if (opcode >= 65536) { cpufunctbl[0xffff](opcode); return; }\n");
+	printf("    goto *targets[opcode];\n");
+	for (opcode = 0; opcode < 65536; opcode++) {
+		printf("opcode_%04x:\n", opcode);
+		printf("    cpufunctbl[%u](opcode);\n", opcode);
+		printf("    return;\n");
+	}
+	printf("#else\n");
+	printf("    cpufunctbl[opcode](opcode);\n");
+	printf("#endif\n}\n");
+	printf("#if defined(__clang__)\n#pragma clang optimize on\n#elif defined(__GNUC__)\n#pragma GCC reset_options\n#endif\n");
+}
+
 #if (defined(OS_cygwin) || defined(OS_mingw)) && defined(EXTENDED_SIGSEGV)
 void cygwin_mingw_abort()
 {
@@ -2844,8 +2880,19 @@ void cygwin_mingw_abort()
 }
 #endif
 
-int main(void)
+int main(int argc, char **argv)
 {
+    int i;
+
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--dispatch=goto") == 0)
+            emit_threaded_dispatch = 1;
+        else {
+            fprintf(stderr, "usage: %s [--dispatch=goto]\n", argv[0]);
+            return 2;
+        }
+    }
+
     init_table68k ();
 
     opcode_map = (int *) malloc (sizeof (int) * nr_cpuop_funcs);
@@ -2877,6 +2924,7 @@ int main(void)
     generate_includes (functblfile);
     generate_func ();
     generate_functbl ();
+    generate_threaded_dispatch ();
     free (table68k);
     fclose(headerfile);
     fclose(stblfile);
