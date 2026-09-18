@@ -67,7 +67,8 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("cpuop_func *handler = NULL"))
         #expect(source.contains("raise(SIGTRAP)"))
         #expect(source.contains("B2_INTERP_GENERATED_GOTO"))
-        #expect(source.contains("cpuemu_threaded_dispatch == NULL"))
+        #expect(source.contains("cpuemu_threaded_dispatch_available"))
+        #expect(source.contains("cpufunctbl[opcode](opcode)"))
         #expect(source.contains("generated goto unavailable"))
     }
 

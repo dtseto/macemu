@@ -2199,12 +2199,19 @@ extern "C" void jit_guest_path_record_nostats(uae_u32 pc);
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
-/* The generated file is optional. A weak fallback keeps the normal target
- * linkable; a generated strong implementation overrides this when linked. */
+/* The generated file is optional. The weak entry points keep the normal target
+ * linkable and make an unavailable opt-in backend execute the normal handler. */
+bool cpuemu_threaded_dispatch_available(void) __attribute__((weak));
+bool cpuemu_threaded_dispatch_available(void)
+{
+    return false;
+}
+
 void cpuemu_threaded_dispatch(uae_u32 opcode) __attribute__((weak));
 void cpuemu_threaded_dispatch(uae_u32 opcode)
 {
-    (void)opcode;
+    /* Never let an absent optional backend silently skip an instruction. */
+    cpufunctbl[opcode](opcode);
 }
 #endif
 
@@ -2267,7 +2274,7 @@ static bool interpreter_generated_goto_enabled()
 	if (cached < 0) {
 		const char *requested = getenv("B2_INTERP_GENERATED_GOTO");
 		const bool enabled = requested && requested[0] && strcmp(requested, "0") != 0;
-		if (enabled && cpuemu_threaded_dispatch == NULL) {
+		if (enabled && !cpuemu_threaded_dispatch_available()) {
 			fprintf(stderr, "B2_INTERP generated goto unavailable; using function-pointer dispatch\\n");
 			cached = 0;
 		} else {
