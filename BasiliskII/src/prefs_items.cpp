@@ -33,6 +33,7 @@ prefs_desc common_prefs_items[] = {
 	{"floppy", TYPE_STRING, true,     "device/file name of Mac floppy drive"},
 	{"cdrom", TYPE_STRING, true,      "device/file names of Mac CD-ROM drive"},
 	{"extfs", TYPE_STRING, false,     "root path of ExtFS"},
+	{"extfs_stat_cache", TYPE_BOOLEAN, false, "cache ExtFS stat results"},
 	{"scsi0", TYPE_STRING, false,     "SCSI target for Mac SCSI ID 0"},
 	{"scsi1", TYPE_STRING, false,     "SCSI target for Mac SCSI ID 1"},
 	{"scsi2", TYPE_STRING, false,     "SCSI target for Mac SCSI ID 2"},
@@ -115,6 +116,7 @@ void AddPrefsDefaults(void)
 	PrefsAddBool("nosound", false);
 	PrefsAddBool("noclipconversion", false);
 	PrefsAddBool("nogui", false);
+	PrefsAddBool("extfs_stat_cache", true);
 	
 #if USE_JIT
 	// JIT compiler specific options

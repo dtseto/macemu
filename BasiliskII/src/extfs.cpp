@@ -113,48 +113,94 @@ static bool ready = false;
 static struct stat root_stat;
 
 // Short-lived cache for repeated Finder and directory metadata queries.
-enum { STAT_CACHE_SIZE = 64 };
+enum { STAT_CACHE_SIZE = 128 };
 static const uint64 STAT_CACHE_TTL_USEC = 500000;
+static const uint64 STAT_CACHE_FAILURE_TTL_USEC = 100000;
+
 struct StatCacheEntry {
 	bool valid;
+	bool failed;
 	char path[MAX_PATH_LENGTH];
 	struct stat value;
+	int error_number;
 	uint64 timestamp;
 	uint64 sequence;
 };
+
 static StatCacheEntry stat_cache[STAT_CACHE_SIZE] = {};
 static uint64 stat_cache_sequence = 0;
+static uint64 stat_cache_hits = 0;
+static uint64 stat_cache_misses = 0;
+static uint64 stat_cache_invalidations = 0;
+static bool stat_cache_enabled = true;
+static bool stat_cache_metrics_enabled = false;
+
+// ExtFS operations run on the emulator's filesystem thread, like the surrounding
+// FSItem state; keep this cache lock-free to avoid adding a mutex to each lookup.
+
+static void report_stat_cache_metrics(void)
+{
+	if (!stat_cache_metrics_enabled)
+		return;
+
+	const uint64 total = stat_cache_hits + stat_cache_misses;
+	const double hit_rate = total == 0 ? 0.0 : (double)stat_cache_hits / (double)total;
+	printf("B2_METRIC extfs.stat_cache_hits=%llu\n", (unsigned long long)stat_cache_hits);
+	printf("B2_METRIC extfs.stat_cache_misses=%llu\n", (unsigned long long)stat_cache_misses);
+	printf("B2_METRIC extfs.stat_cache_invalidations=%llu\n", (unsigned long long)stat_cache_invalidations);
+	printf("B2_METRIC extfs.stat_cache_hit_rate=%.6f\n", hit_rate);
+}
 
 static void stat_cache_invalidate_all(void)
 {
-	for (int i = 0; i < STAT_CACHE_SIZE; i++)
-		stat_cache[i].valid = false;
+	for (int i = 0; i < STAT_CACHE_SIZE; i++) {
+		if (stat_cache[i].valid) {
+			stat_cache[i].valid = false;
+			stat_cache_invalidations++;
+		}
+	}
 }
 
 static int stat_cached(const char *path, struct stat *result)
 {
+	if (!stat_cache_enabled)
+		return stat(path, result);
+
 	const uint64 now = GetTicks_usec();
 	int oldest = 0;
 	for (int i = 0; i < STAT_CACHE_SIZE; i++) {
 		if (stat_cache[i].valid && strcmp(stat_cache[i].path, path) == 0) {
-			if (now - stat_cache[i].timestamp <= STAT_CACHE_TTL_USEC) {
+			const uint64 ttl = stat_cache[i].failed ? STAT_CACHE_FAILURE_TTL_USEC : STAT_CACHE_TTL_USEC;
+			if (now - stat_cache[i].timestamp <= ttl) {
+				stat_cache_hits++;
+				if (stat_cache[i].failed) {
+					errno = stat_cache[i].error_number;
+					return -1;
+				}
 				*result = stat_cache[i].value;
 				stat_cache[i].sequence = ++stat_cache_sequence;
 				return 0;
 			}
 			stat_cache[i].valid = false;
+			stat_cache_invalidations++;
 		}
 		if (!stat_cache[i].valid || stat_cache[i].sequence < stat_cache[oldest].sequence)
 			oldest = i;
 	}
 
+	stat_cache_misses++;
 	const int result_code = stat(path, result);
-	if (result_code == 0 && strlen(path) < MAX_PATH_LENGTH) {
-		stat_cache[oldest].valid = true;
-		strcpy(stat_cache[oldest].path, path);
-		stat_cache[oldest].value = *result;
-		stat_cache[oldest].timestamp = now;
-		stat_cache[oldest].sequence = ++stat_cache_sequence;
+	if (strlen(path) < MAX_PATH_LENGTH) {
+		StatCacheEntry &entry = stat_cache[oldest];
+		entry.valid = true;
+		entry.failed = result_code != 0;
+		strcpy(entry.path, path);
+		if (result_code == 0)
+			entry.value = *result;
+		else
+			entry.error_number = errno;
+		entry.timestamp = now;
+		entry.sequence = ++stat_cache_sequence;
 	}
 	return result_code;
 }
@@ -491,6 +537,18 @@ void ExtFSInit(void)
 	// System specific initialization
 	extfs_init();
 
+	const char *disable_cache = getenv("B2_NO_STAT_CACHE");
+	stat_cache_enabled = PrefsFindBool("extfs_stat_cache") &&
+		(disable_cache == NULL || strcmp(disable_cache, "1") != 0);
+	stat_cache_invalidate_all();
+	const char *metrics = getenv("B2_BENCHMARK_METRICS");
+	stat_cache_metrics_enabled = metrics != NULL && metrics[0] != 0 && strcmp(metrics, "0") != 0;
+	if (stat_cache_metrics_enabled)
+		atexit(report_stat_cache_metrics);
+	printf("B2_OPT path=extfs_stat_cache %s%s\n",
+		stat_cache_enabled ? "active" : "fallback",
+		stat_cache_enabled ? "" : " reason=disabled");
+
 	// Get file system and volume name
 	cstr2pstr(FS_NAME, GetString(STR_EXTFS_NAME));
 	cstr2pstr(VOLUME_NAME, GetString(STR_EXTFS_VOLUME_NAME));
@@ -532,7 +590,7 @@ void ExtFSInit(void)
 	if (path != NULL) {
 		strncpy(RootPath, path, MAX_PATH_LENGTH - 1);
 		RootPath[MAX_PATH_LENGTH - 1] = 0;
-		if (stat_cached(RootPath, &root_stat))
+		if (stat(RootPath, &root_stat))
 			return;
 		if (!S_ISDIR(root_stat.st_mode))
 			return;
