@@ -61,6 +61,8 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("B2_INTERP_BREAK_OPCODE"))
         #expect(source.contains("B2_INTERP_THREADED_PROTO"))
         #expect(source.contains("threaded_targets[0x4e71]"))
+        #expect(source.contains("m68k_dreg(regs, (opcode >> 9) & 7)"))
+        #expect(source.contains("SET_ZFLG(value == 0)"))
         #expect(source.contains("cpuop_func *handler = NULL"))
         #expect(source.contains("raise(SIGTRAP)"))
     }

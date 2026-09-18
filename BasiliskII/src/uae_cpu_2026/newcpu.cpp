@@ -2259,7 +2259,6 @@ void m68k_do_execute (void)
 		for (unsigned i = 0; i < 65536; i++)
 			threaded_targets[i] = &&interpreter_threaded_fallback;
 		threaded_targets[0x4e71] = &&interpreter_threaded_nop;
-		threaded_targets[0x4e75] = &&interpreter_threaded_rts;
 		for (unsigned i = 0x7000; i <= 0x70ff; i++)
 			threaded_targets[i] = &&interpreter_threaded_moveq;
 		threaded_targets_initialized = true;
@@ -2383,14 +2382,16 @@ interpreter_threaded_fallback:
 	(*handler)(opcode);
 	goto interpreter_dispatch_complete;
 interpreter_threaded_nop:
-	(*handler)(opcode);
 	goto interpreter_dispatch_complete;
-interpreter_threaded_rts:
-	(*handler)(opcode);
+interpreter_threaded_moveq: {
+	const uae_s32 value = (uae_s32)(uae_s8)(opcode & 0xff);
+	m68k_dreg(regs, (opcode >> 9) & 7) = (uae_u32)value;
+	SET_ZFLG(value == 0);
+	SET_NFLG(value < 0);
+	SET_VFLG(0);
+	SET_CFLG(0);
 	goto interpreter_dispatch_complete;
-interpreter_threaded_moveq:
-	(*handler)(opcode);
-	goto interpreter_dispatch_complete;
+}
 #endif
 interpreter_dispatch_complete:
 	if (trace_a995_pending && trace_a995_step < 64) {
