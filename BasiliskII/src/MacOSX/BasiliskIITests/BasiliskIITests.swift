@@ -70,6 +70,9 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("cpuemu_threaded_dispatch_available"))
         #expect(source.contains("cpufunctbl[opcode](opcode)"))
         #expect(source.contains("generated goto unavailable"))
+        #expect(source.contains("B2_INTERP_GOTO_VALIDATE"))
+        #expect(source.contains("generated_dispatch_in_progress"))
+        #expect(source.contains("cpuemu_threaded_dispatch_validate"))
     }
 
     @Test("Generated threaded dispatch is opt-in and has a compiler fallback")
@@ -85,6 +88,7 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("goto *targets[opcode]"))
         #expect(source.contains("opcode_%04x"))
         #expect(source.contains("cpuemu_threaded_dispatch_available"))
+        #expect(source.contains("cpuemu_threaded_dispatch_validate"))
         #expect(source.contains("opcode == 65535"))
     }
 

@@ -2858,6 +2858,7 @@ static void generate_threaded_dispatch (void)
 	fprintf(threadedfile, "extern cpuop_func *cpufunctbl[65536];\n\n");
 	fprintf(threadedfile, "#if defined(__GNUC__) || defined(__clang__)\n");
 	fprintf(threadedfile, "bool cpuemu_threaded_dispatch_available(void) { return true; }\n");
+	fprintf(threadedfile, "bool cpuemu_threaded_dispatch_validate(uae_u32 opcode, cpuop_func *normal_handler) { return opcode < 65536 && cpufunctbl[opcode] == normal_handler; }\n");
 	fprintf(threadedfile, "#endif\n\n");
 	fprintf(threadedfile, "void cpuemu_threaded_dispatch(uae_u32 opcode)\n{\n");
 	fprintf(threadedfile, "#if defined(__GNUC__) || defined(__clang__)\n");

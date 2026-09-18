@@ -2207,6 +2207,15 @@ bool cpuemu_threaded_dispatch_available(void)
     return false;
 }
 
+bool cpuemu_threaded_dispatch_validate(uae_u32 opcode, cpuop_func *normal_handler)
+    __attribute__((weak));
+bool cpuemu_threaded_dispatch_validate(uae_u32 opcode, cpuop_func *normal_handler)
+{
+    (void)opcode;
+    (void)normal_handler;
+    return false;
+}
+
 void cpuemu_threaded_dispatch(uae_u32 opcode) __attribute__((weak));
 void cpuemu_threaded_dispatch(uae_u32 opcode)
 {
@@ -2283,6 +2292,52 @@ static bool interpreter_generated_goto_enabled()
 	}
 	return cached != 0;
 }
+
+static bool interpreter_generated_goto_validate_opcode(uae_u16 opcode)
+{
+	static bool initialized = false;
+	static bool validate_all = false;
+	static uae_u16 selected[64];
+	static unsigned selected_count = 0;
+
+	if (!initialized) {
+		const char *value = getenv("B2_INTERP_GOTO_VALIDATE");
+		if (value && *value) {
+			const char *p = value;
+			while (*p) {
+				while (*p == ' ' || *p == '\t' || *p == ',' || *p == ';')
+					p++;
+				if (!*p)
+					break;
+				const char *start = p;
+				while (*p && *p != ' ' && *p != '\t' && *p != ',' && *p != ';')
+					p++;
+				size_t length = (size_t)(p - start);
+				if (length == 3 && strncmp(start, "all", 3) == 0) {
+					validate_all = true;
+					continue;
+				}
+				if (length < 32 && selected_count < 64) {
+					char token[32];
+					memcpy(token, start, length);
+					token[length] = 0;
+					char *end = NULL;
+					unsigned long parsed = strtoul(token, &end, 0);
+					if (end != token && *end == 0 && parsed <= 0xffff)
+						selected[selected_count++] = (uae_u16)parsed;
+				}
+			}
+		}
+		initialized = true;
+	}
+
+	if (validate_all)
+		return true;
+	for (unsigned i = 0; i < selected_count; i++)
+		if (selected[i] == opcode)
+			return true;
+	return false;
+}
 #endif
 
 static void interpreter_dispatch_breakpoint(uae_u32 pc, uae_u16 opcode)
@@ -2316,6 +2371,8 @@ void m68k_do_execute (void)
     static unsigned long trace_window_count = 0;
 	cpuop_func *handler = NULL;
 #if defined(__GNUC__) || defined(__clang__)
+	static bool generated_dispatch_in_progress = false;
+	static bool generated_validation_reported = false;
 	static void *threaded_targets[65536];
 	static bool threaded_targets_initialized = false;
 	const bool threaded_prototype = interpreter_threaded_prototype_enabled();
@@ -2440,8 +2497,22 @@ void m68k_do_execute (void)
 	handler = cpufunctbl[opcode];
 #if defined(__GNUC__) || defined(__clang__)
 	if (generated_goto) {
-		cpuemu_threaded_dispatch(opcode);
-		goto interpreter_dispatch_complete;
+		bool use_generated = true;
+		if (interpreter_generated_goto_validate_opcode((uae_u16)opcode) &&
+			!cpuemu_threaded_dispatch_validate(opcode, handler)) {
+			if (!generated_validation_reported) {
+				fprintf(stderr,
+					"B2_INTERP generated goto validation mismatch; using function-pointer dispatch\\n");
+				generated_validation_reported = true;
+			}
+			use_generated = false;
+		}
+		if (use_generated && !generated_dispatch_in_progress) {
+			generated_dispatch_in_progress = true;
+			cpuemu_threaded_dispatch(opcode);
+			generated_dispatch_in_progress = false;
+			goto interpreter_dispatch_complete;
+		}
 	}
 	if (threaded_prototype)
 		goto *threaded_targets[opcode];

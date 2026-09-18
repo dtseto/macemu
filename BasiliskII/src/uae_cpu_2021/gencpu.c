@@ -2847,10 +2847,11 @@ static void generate_threaded_dispatch (void)
 	if (!emit_threaded_dispatch)
 		return;
 
-	printf("\n#if defined(__GNUC__) || defined(__clang__)\n");
+	printf("\nextern cpuop_func *cpufunctbl[65536];\n\n");
+	printf("#if defined(__GNUC__) || defined(__clang__)\n");
 	printf("bool cpuemu_threaded_dispatch_available(void) { return true; }\n");
+	printf("bool cpuemu_threaded_dispatch_validate(uae_u32 opcode, cpuop_func *normal_handler) { return opcode < 65536 && cpufunctbl[opcode] == normal_handler; }\n");
 	printf("#endif\n\n");
-	printf("extern cpuop_func *cpufunctbl[65536];\n\n");
 	printf("#if defined(__clang__)\n#pragma clang optimize off\n#elif defined(__GNUC__)\n#pragma GCC optimize (\\\"O0\\\")\n#endif\n");
 	printf("void cpuemu_threaded_dispatch(uae_u32 opcode)\n{\n");
 	printf("#if defined(__GNUC__) || defined(__clang__)\n");
