@@ -2288,6 +2288,8 @@ static bool interpreter_generated_goto_enabled()
 			cached = 0;
 		} else {
 			cached = enabled ? 1 : 0;
+			if (cached)
+				fprintf(stderr, "B2_INTERP generated goto enabled\\n");
 		}
 	}
 	return cached != 0;
