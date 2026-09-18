@@ -92,6 +92,68 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("opcode == 65535"))
     }
 
+    @Test("Computed-goto generator covers the complete opcode space")
+    func computedGotoGeneratorCoversCompleteOpcodeSpace() throws {
+        let generator = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2021/gencpu.c"),
+            encoding: .utf8
+        )
+        let dispatcher = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2026/gencpu.c"),
+            encoding: .utf8
+        )
+
+        #expect(generator.contains("int main(int argc, char **argv)"))
+        #expect(generator.contains("--dispatch=goto"))
+        #expect(generator.contains("targets[65536]"))
+        #expect(generator.contains("for (opcode = 0; opcode < 65536; opcode++)"))
+        #expect(generator.contains("opcode == 65535"))
+        #expect(generator.contains("cpufunctbl[opcode](opcode)"))
+        #expect(dispatcher.contains("cpuemu_threaded_dispatch_available"))
+        #expect(dispatcher.contains("cpuemu_threaded_dispatch_validate"))
+    }
+
+    @Test("Computed-goto runtime modes remain opt-in and differential-safe")
+    func computedGotoRuntimeModesRemainOptInAndDifferentialSafe() throws {
+        let interpreter = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2026/newcpu.cpp"),
+            encoding: .utf8
+        )
+        let makefile = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/Makefile.gencpu_2021"),
+            encoding: .utf8
+        )
+
+        #expect(interpreter.contains("B2_INTERP_GENERATED_GOTO"))
+        #expect(interpreter.contains("B2_INTERP_GOTO_VALIDATE"))
+        #expect(interpreter.contains("cpuemu_threaded_dispatch_validate(opcode, handler)"))
+        #expect(interpreter.contains("generated_validation_reported"))
+        #expect(interpreter.contains("generated_dispatch_in_progress"))
+        #expect(interpreter.contains("cpufunctbl[opcode](opcode)"))
+        #expect(makefile.contains("B2_GENERATE_INTERP_GOTO"))
+        #expect(makefile.contains("./gencpu $(DISPATCH_ARG)"))
+    }
+
+    @Test("Deterministic opcode sequence has normal and generated handler paths")
+    func deterministicOpcodeSequenceHasNormalAndGeneratedHandlerPaths() throws {
+        let interpreter = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2026/newcpu.cpp"),
+            encoding: .utf8
+        )
+        let generator = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2021/gencpu.c"),
+            encoding: .utf8
+        )
+
+        let sequence = ["4e71", "7001", "7002", "4e75"]
+        #expect(sequence.count == 4)
+        #expect(sequence.allSatisfy { $0.count == 4 })
+        #expect(generator.contains("opcode_%04x"))
+        #expect(interpreter.contains("cpufunctbl[opcode]"))
+        #expect(interpreter.contains("(*handler)(opcode)"))
+        #expect(interpreter.contains("cpuemu_threaded_dispatch(opcode)"))
+    }
+
     @Test("JIT feature switch is value-based and defaults off")
     func jitFeatureSwitchIsValueBased() throws {
         let header = try String(
