@@ -2192,6 +2192,12 @@ extern "C" bool jit_guest_instruction_observer_enabled(void);
 extern "C" void jit_guest_path_record_nostats(uae_u32 pc);
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+/* The generated file is optional. A weak reference makes the runtime
+ * experiment safe even when the normal Xcode target has not linked it. */
+extern void cpuemu_threaded_dispatch(uae_u32 opcode) __attribute__((weak));
+#endif
+
 static unsigned long long interpreter_dispatch_count = 0;
 
 static bool interpreter_dispatch_metrics_enabled()
@@ -2216,6 +2222,22 @@ static bool interpreter_threaded_prototype_enabled()
 	if (cached < 0) {
 		const char *enabled = getenv("B2_INTERP_THREADED_PROTO");
 		cached = enabled && enabled[0] && strcmp(enabled, "0") != 0 ? 1 : 0;
+	}
+	return cached != 0;
+}
+
+static bool interpreter_generated_goto_enabled()
+{
+	static int cached = -1;
+	if (cached < 0) {
+		const char *requested = getenv("B2_INTERP_GENERATED_GOTO");
+		const bool enabled = requested && requested[0] && strcmp(requested, "0") != 0;
+		if (enabled && cpuemu_threaded_dispatch == NULL) {
+			fprintf(stderr, "B2_INTERP generated goto unavailable; using function-pointer dispatch\\n");
+			cached = 0;
+		} else {
+			cached = enabled ? 1 : 0;
+		}
 	}
 	return cached != 0;
 }
@@ -2255,6 +2277,7 @@ void m68k_do_execute (void)
 	static void *threaded_targets[65536];
 	static bool threaded_targets_initialized = false;
 	const bool threaded_prototype = interpreter_threaded_prototype_enabled();
+	const bool generated_goto = interpreter_generated_goto_enabled();
 	if (threaded_prototype && !threaded_targets_initialized) {
 		for (unsigned i = 0; i < 65536; i++)
 			threaded_targets[i] = &&interpreter_threaded_fallback;
@@ -2372,6 +2395,10 @@ void m68k_do_execute (void)
 	interpreter_dispatch_breakpoint(pc, (uae_u16)opcode);
 	handler = cpufunctbl[opcode];
 #if defined(__GNUC__) || defined(__clang__)
+	if (generated_goto) {
+		cpuemu_threaded_dispatch(opcode);
+		goto interpreter_dispatch_complete;
+	}
 	if (threaded_prototype)
 		goto *threaded_targets[opcode];
 #endif

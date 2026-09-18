@@ -65,6 +65,9 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("SET_ZFLG(value == 0)"))
         #expect(source.contains("cpuop_func *handler = NULL"))
         #expect(source.contains("raise(SIGTRAP)"))
+        #expect(source.contains("B2_INTERP_GENERATED_GOTO"))
+        #expect(source.contains("cpuemu_threaded_dispatch == NULL"))
+        #expect(source.contains("generated goto unavailable"))
     }
 
     @Test("Generated threaded dispatch is opt-in and has a compiler fallback")
