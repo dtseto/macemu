@@ -168,6 +168,30 @@ static bool sdl_palette_changed = false;			// Flag: Palette changed, redraw thre
 static bool toggle_fullscreen = false;
 static bool did_add_event_watch = false;
 
+// Opt-in calibration metrics for comparing VOSF behavior across hosts.
+static bool benchmark_video_metrics = false;
+static int benchmark_vosf_accepted = -1;
+static uint32 benchmark_vosf_duration_usec = 0;
+static uint32 benchmark_vosf_page_faults = 0;
+static uint32 benchmark_vosf_threshold_usec = 0;
+
+static void report_video_metrics()
+{
+	if (!benchmark_video_metrics)
+		return;
+	printf("B2_METRIC video.neon_path_active=%d\\n", (int)
+#ifdef __aarch64__
+		1
+#else
+		0
+#endif
+	);
+	printf("B2_METRIC vosf.accepted=%d\\n", benchmark_vosf_accepted);
+	printf("B2_METRIC vosf.duration_usec=%u\\n", benchmark_vosf_duration_usec);
+	printf("B2_METRIC vosf.page_faults=%u\\n", benchmark_vosf_page_faults);
+	printf("B2_METRIC vosf.threshold_usec=%u\\n", benchmark_vosf_threshold_usec);
+}
+
 static bool mouse_grabbed = false;
 
 // Mutex to protect SDL events
@@ -1065,6 +1089,15 @@ void driver_base::set_video_mode(int flags, int pitch)
 
 void driver_base::init()
 {
+	static bool did_init_benchmark_metrics = false;
+	if (!did_init_benchmark_metrics) {
+		const char *enabled = getenv("B2_BENCHMARK_METRICS");
+		benchmark_video_metrics = enabled && enabled[0] && strcmp(enabled, "0") != 0;
+		if (benchmark_video_metrics)
+			atexit(report_video_metrics);
+		did_init_benchmark_metrics = true;
+	}
+
 	int pitch = VIDEO_MODE_X;
 	switch (VIDEO_MODE_DEPTH) {
 		case VIDEO_DEPTH_16BIT: pitch <<= 1; break;
@@ -1084,12 +1117,20 @@ void driver_base::init()
 	// Check whether we can initialize the VOSF subsystem and it's profitable
 	if (!video_vosf_init(monitor)) {
 		WarningAlert(GetString(STR_VOSF_INIT_ERR));
+		benchmark_vosf_accepted = 0;
 		use_vosf = false;
 	}
-	else if (!video_vosf_profitable()) {
-		video_vosf_exit();
-		printf("VOSF acceleration is not profitable on this platform, disabling it\n");
-		use_vosf = false;
+	else {
+		benchmark_vosf_threshold_usec = video_vosf_effective_threshold(PrefsFindInt32("vosf_threshold"));
+		const bool profitable = video_vosf_profitable(&benchmark_vosf_duration_usec, &benchmark_vosf_page_faults);
+		benchmark_vosf_accepted = profitable ? 1 : 0;
+		printf("VOSF calibration: %u page faults in %u usec, threshold %u usec/frame, %s\\n",
+			benchmark_vosf_page_faults, benchmark_vosf_duration_usec,
+			benchmark_vosf_threshold_usec, profitable ? "enabled" : "disabled");
+		if (!profitable) {
+			video_vosf_exit();
+			use_vosf = false;
+		}
 	}
     if (!use_vosf) {
 		free(the_buffer_copy);
