@@ -875,7 +875,7 @@ static void jit_block_verify_entry_capture(uae_u32 block_pc)
 
 static inline uae_u32 jit_block_verify_arch_spcflags(uae_u32 spcflags)
 {
-#if defined(USE_JIT)
+#if USE_JIT
     /* SPCFLAG_JIT_* bits are compiler/dispatcher control state, not guest
        architectural state.  The interpreter side can legitimately finish a
        verifier replay with JIT_END_COMPILE set while the native replay exits

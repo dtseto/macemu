@@ -1186,7 +1186,6 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
-					"USE_JIT=1",
 					"USE_SDL3=1",
 				);
 				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64]" = "$(inherited)";
@@ -1285,7 +1284,6 @@
 				GCC_OPTIMIZATION_LEVEL = 3;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
-					"USE_JIT=1",
 					"USE_SDL3=1",
 				);
 				"GCC_PREPROCESSOR_DEFINITIONS[arch=arm64]" = "$(inherited)";

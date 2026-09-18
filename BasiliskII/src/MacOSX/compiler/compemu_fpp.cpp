@@ -37,7 +37,7 @@
  * Adapted for JIT compilation (c) Bernd Meyer, 2000
  */
 
-#ifdef USE_JIT
+#if USE_JIT
 
 #include "sysdeps.h"
 

@@ -1499,6 +1499,12 @@ void m68k_reset (void)
 #endif
 }
 
+#if USE_JIT
+static unsigned b2_debug_nzcv(void) { return (unsigned)regflags.nzcv; }
+#else
+static unsigned b2_debug_nzcv(void) { return 0; }
+#endif
+
 static bool b2_test_retdump_enabled(void)
 {
 	static int cached = -1;
@@ -1524,7 +1530,7 @@ void m68k_emulop_return(void)
 			(unsigned)m68k_areg(regs, 2), (unsigned)m68k_areg(regs, 3),
 			(unsigned)m68k_areg(regs, 4), (unsigned)m68k_areg(regs, 5),
 			(unsigned)m68k_areg(regs, 6), (unsigned)m68k_areg(regs, 7), (unsigned)regs.sr,
-			(unsigned)regflags.nzcv, (unsigned)regflags.x);
+			(unsigned)b2_debug_nzcv(), (unsigned)regflags.x);
 	}
 	SPCFLAGS_SET( SPCFLAG_BRK );
 	quit_program = 1;
@@ -2368,7 +2374,7 @@ void m68k_do_execute (void)
 	            (unsigned)m68k_areg(regs,2), (unsigned)m68k_areg(regs,3),
 	            (unsigned)m68k_areg(regs,4), (unsigned)m68k_areg(regs,5),
 	            (unsigned)m68k_areg(regs,6), (unsigned)m68k_areg(regs,7),
-	            (unsigned)regs.sr, (unsigned)regflags.nzcv, (unsigned)regflags.x,
+	            (unsigned)regs.sr, (unsigned)b2_debug_nzcv(), (unsigned)regflags.x,
 	            (unsigned)get_long(m68k_areg(regs,7) + 0),
 	            (unsigned)get_long(m68k_areg(regs,7) + 4),
 	            (unsigned)get_long(m68k_areg(regs,7) + 8),

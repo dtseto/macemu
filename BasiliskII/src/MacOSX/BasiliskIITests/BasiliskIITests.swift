@@ -85,6 +85,18 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("opcode_%04x"))
     }
 
+    @Test("JIT feature switch is value-based and defaults off")
+    func jitFeatureSwitchIsValueBased() throws {
+        let header = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu.h"),
+            encoding: .utf8
+        )
+        #expect(header.contains("#ifndef USE_JIT"))
+        #expect(header.contains("#define USE_JIT 0"))
+        #expect(header.contains("#if USE_JIT"))
+        #expect(!header.contains("#define USE_JIT\n"))
+    }
+
     @Test("Audio shutdown releases callback before closing SDL")
     func audioShutdownOrdering() throws {
         let source = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/audio_sdl.cpp"), encoding: .utf8)

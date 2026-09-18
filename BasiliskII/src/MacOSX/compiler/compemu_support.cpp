@@ -29,7 +29,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifdef USE_JIT
+#if USE_JIT
 
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)
 #define flush_icache arm_flush_icache_impl

@@ -41,11 +41,13 @@ typedef uae_u64 uintptr;
 #else
 typedef uae_u32 uintptr;
 #endif
-/* FIXME: cpummu.cpp also checks for USE_JIT, possibly others */
-#define USE_JIT
 #endif
 
-#ifdef USE_JIT
+#ifndef USE_JIT
+#define USE_JIT 0
+#endif
+
+#if USE_JIT
 
 #ifndef JIT
 #define JIT 1

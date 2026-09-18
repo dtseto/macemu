@@ -1,3 +1,5 @@
+#if USE_JIT
+
 #include "sysdeps.h"
 #include "m68k.h"
 #include "memory.h"
@@ -1874,6 +1876,7 @@ const struct comptbl op_smalltbl_0_comp_ff[] = {
 { op_f618_0_comp_ff, 63000, 0x00000002 }, /* MOVE16 */
 { op_f620_0_comp_ff, 63008, 0x00000002 }, /* MOVE16 */
 { 0, 65536, 0 }};
+
 const struct comptbl op_smalltbl_0_comp_nf[] = {
 { op_0_0_comp_nf, 0, 0x00000002 }, /* OR */
 { op_10_0_comp_nf, 16, 0x00000002 }, /* OR */
@@ -3743,3 +3746,5 @@ const struct comptbl op_smalltbl_0_comp_nf[] = {
 { op_f618_0_comp_nf, 63000, 0x00000002 }, /* MOVE16 */
 { op_f620_0_comp_nf, 63008, 0x00000002 }, /* MOVE16 */
 { 0, 65536, 0 }};
+
+#endif /* USE_JIT */

@@ -89,8 +89,6 @@ typedef uae_s64 intptr;
 #else
 typedef uae_u32 uintptr;
 #endif
-/* FIXME: cpummu.cpp also checks for USE_JIT, possibly others */
-#define USE_JIT
 #endif
 
 #define JITPTR (uintptr)

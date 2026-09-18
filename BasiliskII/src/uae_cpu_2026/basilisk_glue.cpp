@@ -555,6 +555,7 @@ static bool run_opcode_test_mode_glue()
 			(unsigned)m68k_areg(regs, 4), (unsigned)m68k_areg(regs, 5),
 			(unsigned)m68k_areg(regs, 6), (unsigned)m68k_areg(regs, 7), (unsigned)regs.sr,
 			(unsigned)fpu_get_fpsr());
+#if USE_JIT
 		if (test_dump_fp_enabled_glue())
 			fprintf(stderr,
 			" FP0=%016llx FP1=%016llx FP2=%016llx FP3=%016llx FP4=%016llx FP5=%016llx FP6=%016llx FP7=%016llx",
@@ -566,6 +567,7 @@ static bool run_opcode_test_mode_glue()
 			(unsigned long long)double_bits_glue(regs.jit_fpregs[5]),
 			(unsigned long long)double_bits_glue(regs.jit_fpregs[6]),
 			(unsigned long long)double_bits_glue(regs.jit_fpregs[7]));
+#endif
 		fputc('\n', stderr);
 		dump_test_mem_ranges_glue();
 	}

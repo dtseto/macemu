@@ -5168,6 +5168,7 @@ int main(void)
 
 	generate_includes(stdout);
 	generate_includes(stblfile);
+	fprintf(stblfile, "#if USE_JIT\n\n");
 
 #ifdef USE_XCODE
 	printf("#include \"compemu.h\"\n");
@@ -5197,6 +5198,7 @@ int main(void)
 	free(counts);
 
 	free(table68k);
+	fprintf(stblfile, "\n#endif /* USE_JIT */\n");
 	fclose(stblfile);
 	fclose(headerfile);
 	return 0;
