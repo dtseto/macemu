@@ -266,7 +266,7 @@ void TimerInit(void)
 	TimerReset();
 
 #if PRECISE_TIMING_MACH
-	printf("B2_OPT path=monotonic_timer fallback reason=mach_realtime_clock_path\n");
+	printf("B2_OPT path=monotonic_timer active\n");
 #elif PRECISE_TIMING_POSIX
 #if defined(CLOCK_MONOTONIC)
 	printf("B2_OPT path=monotonic_timer active\n");
@@ -288,7 +288,9 @@ void TimerInit(void)
 #elif PRECISE_TIMING_MACH
 	pthread_t pthread;
 	
-	host_get_clock_service(mach_host_self(), REALTIME_CLOCK, &system_clock);
+	// Keep the sleep clock in the same monotonic clock domain used by
+	// timer_current_time() in timer_unix.cpp.
+	host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &system_clock);
 	semaphore_create(mach_task_self(), &wakeup_time_sem, SYNC_POLICY_FIFO, 1);
 
 	pthread_create(&pthread, NULL, &timer_func, NULL);

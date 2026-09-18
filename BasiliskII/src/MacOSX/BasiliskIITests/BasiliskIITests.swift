@@ -325,7 +325,7 @@ struct BenchmarkHarnessTests {
         #expect(sysdeps.contains("#define PRECISE_TIMING_MACH 1"))
         #expect(timer.contains("CLOCK_MONOTONIC"))
         #expect(timer.contains("B2_OPT path=monotonic_timer active"))
-        #expect(timer.contains("B2_OPT path=monotonic_timer fallback reason=mach_realtime_clock_path"))
+        #expect(timer.contains("host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &system_clock)"))
         #expect(timer.contains("B2_OPT path=monotonic_timer fallback reason=precise_timing_unavailable"))
 
         #expect(vosf.contains("#ifdef ENABLE_VOSF"))
