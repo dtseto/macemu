@@ -2856,6 +2856,9 @@ static void generate_threaded_dispatch (void)
 	fprintf(threadedfile, "#include \"sysdeps.h\"\n");
 	fprintf(threadedfile, "#include \"newcpu.h\"\n\n");
 	fprintf(threadedfile, "extern cpuop_func *cpufunctbl[65536];\n\n");
+	fprintf(threadedfile, "#if defined(__GNUC__) || defined(__clang__)\n");
+	fprintf(threadedfile, "bool cpuemu_threaded_dispatch_available(void) { return true; }\n");
+	fprintf(threadedfile, "#endif\n\n");
 	fprintf(threadedfile, "void cpuemu_threaded_dispatch(uae_u32 opcode)\n{\n");
 	fprintf(threadedfile, "#if defined(__GNUC__) || defined(__clang__)\n");
 	fprintf(threadedfile, "    static const void *const targets[65536] = {\n");

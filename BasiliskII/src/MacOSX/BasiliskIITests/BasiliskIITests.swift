@@ -84,6 +84,8 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("cpufunctbl[opcode](opcode)"))
         #expect(source.contains("goto *targets[opcode]"))
         #expect(source.contains("opcode_%04x"))
+        #expect(source.contains("cpuemu_threaded_dispatch_available"))
+        #expect(source.contains("opcode == 65535"))
     }
 
     @Test("JIT feature switch is value-based and defaults off")
