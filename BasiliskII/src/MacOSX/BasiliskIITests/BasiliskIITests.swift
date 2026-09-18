@@ -58,6 +58,7 @@ struct BenchmarkHarnessTests {
             encoding: .utf8
         )
         #expect(source.contains("B2_INTERP_DISPATCH_METRICS"))
+        #expect(source.contains("B2_INTERP_OPCODE_HISTOGRAM"))
         #expect(source.contains("B2_INTERP_BREAK_OPCODE"))
         #expect(source.contains("B2_INTERP_THREADED_PROTO"))
         #expect(source.contains("threaded_targets[0x4e71]"))

@@ -2199,6 +2199,31 @@ extern void cpuemu_threaded_dispatch(uae_u32 opcode) __attribute__((weak));
 #endif
 
 static unsigned long long interpreter_dispatch_count = 0;
+static unsigned long long interpreter_opcode_counts[65536] = {};
+
+static bool interpreter_opcode_histogram_enabled()
+{
+	static int cached = -1;
+	if (cached < 0) {
+		const char *enabled = getenv("B2_INTERP_OPCODE_HISTOGRAM");
+		cached = enabled && enabled[0] && strcmp(enabled, "0") != 0 ? 1 : 0;
+		if (cached)
+			atexit([] {
+				for (int rank = 0; rank < 16; rank++) {
+					unsigned best = 0;
+					for (unsigned opcode = 1; opcode < 65536; opcode++)
+						if (interpreter_opcode_counts[opcode] > interpreter_opcode_counts[best])
+							best = opcode;
+					if (interpreter_opcode_counts[best] == 0)
+						break;
+					fprintf(stderr, "B2_METRIC cpu.interpreter_opcode_%04x=%llu\\n",
+						best, (unsigned long long)interpreter_opcode_counts[best]);
+					interpreter_opcode_counts[best] = 0;
+				}
+			});
+	}
+	return cached != 0;
+}
 
 static bool interpreter_dispatch_metrics_enabled()
 {
@@ -2392,6 +2417,8 @@ void m68k_do_execute (void)
 #endif
 	if (interpreter_dispatch_metrics_enabled())
 		interpreter_dispatch_count++;
+	if (interpreter_opcode_histogram_enabled())
+		interpreter_opcode_counts[opcode]++;
 	interpreter_dispatch_breakpoint(pc, (uae_u16)opcode);
 	handler = cpufunctbl[opcode];
 #if defined(__GNUC__) || defined(__clang__)
