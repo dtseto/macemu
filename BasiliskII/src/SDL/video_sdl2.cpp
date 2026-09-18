@@ -156,6 +156,34 @@ static SDL_Rect sdl_update_video_rect = {0,0,0,0};  // Union of all rects to upd
 // Opt-in counters consumed by tools/benchmark. Keeping them behind an
 // environment variable avoids perturbing normal emulator runs.
 static bool benchmark_video_metrics = false;
+static bool vosf_diagnostics_reported = false;
+static bool vosf_policy_reported = false;
+
+static void report_vosf_policy(bool active, const char *reason)
+{
+	if (vosf_policy_reported)
+		return;
+	vosf_policy_reported = true;
+	if (active)
+		printf("B2_OPT path=VOSF_policy active\n");
+	else
+		printf("B2_OPT path=VOSF_policy fallback reason=%s\n", reason);
+}
+
+static void report_vosf_diagnostics(void)
+{
+	if (vosf_diagnostics_reported)
+		return;
+	vosf_diagnostics_reported = true;
+#ifdef ENABLE_VOSF
+	if (benchmark_video_metrics)
+		printf("B2_OPT path=VOSF_diagnostics active\n");
+	else
+		printf("B2_OPT path=VOSF_diagnostics fallback reason=benchmark_metrics_disabled\n");
+#else
+	printf("B2_OPT path=VOSF_diagnostics fallback reason=VOSF_compiled_out\n");
+#endif
+}
 static uint64 benchmark_present_count = 0;
 static uint64 benchmark_present_ticks = 0;
 static uint64 benchmark_upload_bytes = 0;
@@ -1197,6 +1225,9 @@ void driver_base::init()
 		the_host_buffer = NULL;
 	}
 #endif
+	#ifdef ENABLE_VOSF
+	report_vosf_policy(use_vosf, use_vosf ? "" : (benchmark_vosf_accepted == 0 ? "policy_rejected" : "init_failed"));
+	#endif
 	if (!use_vosf) {
 		// Allocate memory for frame buffer
 		the_buffer_size = (aligned_height + 2) * pitch;
@@ -1537,6 +1568,10 @@ bool VideoInit(bool classic)
 			atexit(report_video_metrics);
 		did_init_benchmark_metrics = true;
 	}
+	report_vosf_diagnostics();
+#ifndef ENABLE_VOSF
+	report_vosf_policy(false, "compiled_out");
+#endif
 
 #ifdef ENABLE_VOSF
 	// Zero the mainBuffer structure

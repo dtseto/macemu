@@ -170,6 +170,34 @@ static bool did_add_event_watch = false;
 
 // Opt-in calibration metrics for comparing VOSF behavior across hosts.
 static bool benchmark_video_metrics = false;
+static bool vosf_diagnostics_reported = false;
+static bool vosf_policy_reported = false;
+
+static void report_vosf_policy(bool active, const char *reason)
+{
+	if (vosf_policy_reported)
+		return;
+	vosf_policy_reported = true;
+	if (active)
+		printf("B2_OPT path=VOSF_policy active\n");
+	else
+		printf("B2_OPT path=VOSF_policy fallback reason=%s\n", reason);
+}
+
+static void report_vosf_diagnostics()
+{
+	if (vosf_diagnostics_reported)
+		return;
+	vosf_diagnostics_reported = true;
+#ifdef ENABLE_VOSF
+	if (benchmark_video_metrics)
+		printf("B2_OPT path=VOSF_diagnostics active\n");
+	else
+		printf("B2_OPT path=VOSF_diagnostics fallback reason=benchmark_metrics_disabled\n");
+#else
+	printf("B2_OPT path=VOSF_diagnostics fallback reason=VOSF_compiled_out\n");
+#endif
+}
 static int benchmark_vosf_accepted = -1;
 static uint32 benchmark_vosf_duration_usec = 0;
 static uint32 benchmark_vosf_page_faults = 0;
@@ -1122,6 +1150,10 @@ void driver_base::init()
 			atexit(report_video_metrics);
 		did_init_benchmark_metrics = true;
 	}
+	report_vosf_diagnostics();
+#ifndef ENABLE_VOSF
+	report_vosf_policy(false, "compiled_out");
+#endif
 
 	int pitch = VIDEO_MODE_X;
 	switch (VIDEO_MODE_DEPTH) {
@@ -1163,6 +1195,9 @@ void driver_base::init()
 		the_host_buffer = NULL;
 	}
 #endif
+	#ifdef ENABLE_VOSF
+	report_vosf_policy(use_vosf, use_vosf ? "" : (benchmark_vosf_accepted == 0 ? "policy_rejected" : "init_failed"));
+	#endif
 	if (!use_vosf) {
 		// Allocate memory for frame buffer
 		the_buffer_size = (aligned_height + 2) * pitch;
