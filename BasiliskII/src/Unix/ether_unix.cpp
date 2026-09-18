@@ -145,6 +145,39 @@ static bool thread_active = false;			// Flag: Packet reception thread installed
 static sem_t int_ack;						// Interrupt acknowledge semaphore
 static bool udp_tunnel;						// Flag: UDP tunnelling active, fd is the socket descriptor
 static int net_if_type = -1;				// Ethernet device type
+static bool ethernet_optimization_diagnostics_reported = false;
+
+static void report_ethernet_optimization_diagnostics(bool network_disabled, bool init_succeeded)
+{
+	if (ethernet_optimization_diagnostics_reported)
+		return;
+	ethernet_optimization_diagnostics_reported = true;
+	if (network_disabled) {
+		printf("B2_OPT path=ethernet_poll fallback reason=network_disabled\n");
+		printf("B2_OPT path=adaptive_slirp_timeout fallback reason=network_disabled\n");
+		return;
+	}
+	if (!init_succeeded) {
+		printf("B2_OPT path=ethernet_poll fallback reason=ether_init_failed\n");
+		printf("B2_OPT path=adaptive_slirp_timeout fallback reason=ether_init_failed\n");
+		return;
+	}
+#if USE_POLL
+	printf("B2_OPT path=ethernet_poll active\n");
+#else
+	printf("B2_OPT path=ethernet_poll fallback reason=poll_unavailable\n");
+#endif
+#if defined(HAVE_SLIRP) && USE_SLIRP_TIMEOUT
+	if (net_if_type == NET_IF_SLIRP)
+		printf("B2_OPT path=adaptive_slirp_timeout active\n");
+	else
+		printf("B2_OPT path=adaptive_slirp_timeout fallback reason=slirp_interface_not_selected\n");
+#elif !defined(HAVE_SLIRP)
+	printf("B2_OPT path=adaptive_slirp_timeout fallback reason=slirp_unavailable\n");
+#else
+	printf("B2_OPT path=adaptive_slirp_timeout fallback reason=adaptive_timeout_disabled\n");
+#endif
+}
 static char *net_if_name = NULL;			// TUN/TAP device name
 static const char *net_if_script = NULL;	// Network config script
 static pthread_t slirp_thread;				// Slirp reception thread
@@ -628,10 +661,13 @@ void EtherInit(void)
 	net_open = false;
 
 	// Do nothing if the user disabled the network
-	if (PrefsFindBool("nonet"))
+	if (PrefsFindBool("nonet")) {
+		report_ethernet_optimization_diagnostics(true, false);
 		return;
+	}
 
 	net_open = ether_init();
+	report_ethernet_optimization_diagnostics(false, net_open);
 }
 
 // Exit ethernet

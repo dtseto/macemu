@@ -114,6 +114,42 @@ struct open_mac_file_handle {
 	open_mac_file_handle *next;
 };
 static open_mac_file_handle *open_mac_file_handles = NULL;
+static bool regular_file_pread_diagnostic_reported = false;
+static bool special_file_pread_diagnostic_reported = false;
+static bool bincue_active_diagnostic_reported = false;
+static bool bincue_fallback_diagnostic_reported = false;
+
+static void report_regular_file_io_path(bool regular_file)
+{
+	if (regular_file) {
+		if (!regular_file_pread_diagnostic_reported) {
+			regular_file_pread_diagnostic_reported = true;
+			printf("B2_OPT path=regular_file_pread_pwrite active\n");
+		}
+	} else if (!special_file_pread_diagnostic_reported) {
+		special_file_pread_diagnostic_reported = true;
+		printf("B2_OPT path=regular_file_pread_pwrite fallback reason=special_file_shared_offset\n");
+	}
+}
+
+static void report_bincue_path(bool selected)
+{
+#if defined(BINCUE)
+	if (selected && !bincue_active_diagnostic_reported) {
+		bincue_active_diagnostic_reported = true;
+		printf("B2_OPT path=bincue_positional_reads active\n");
+	} else if (!selected && !bincue_fallback_diagnostic_reported) {
+		bincue_fallback_diagnostic_reported = true;
+		printf("B2_OPT path=bincue_positional_reads fallback reason=bincue_path_not_selected\n");
+	}
+#else
+	(void)selected;
+	if (!bincue_fallback_diagnostic_reported) {
+		bincue_fallback_diagnostic_reported = true;
+		printf("B2_OPT path=bincue_positional_reads fallback reason=compiled_out\n");
+	}
+#endif
+}
 
 // File handle of first floppy drive (for SysMountFirstFloppy())
 static mac_file_handle *first_floppy = NULL;
@@ -598,6 +634,7 @@ void *Sys_open(const char *name, bool read_only, bool is_cdrom)
 	if (binfd) {
 		mac_file_handle *fh = open_filehandle(name);
 		D(bug("opening %s as bincue\n", name));
+		report_bincue_path(true);
 		fh->bincue_fd = binfd;
 		fh->is_bincue = true;
 		fh->read_only = true;
@@ -605,6 +642,7 @@ void *Sys_open(const char *name, bool read_only, bool is_cdrom)
 		sys_add_mac_file_handle(fh);
 		return fh;
 	}
+	report_bincue_path(false);
 #endif
 
 
@@ -655,6 +693,7 @@ void *Sys_open(const char *name, bool read_only, bool is_cdrom)
 		mac_file_handle *fh = open_filehandle(name);
 		fh->fd = fd;
 		fh->is_file = is_file;
+		report_regular_file_io_path(fh->is_file);
 		fh->read_only = read_only;
 		fh->is_floppy = is_floppy;
 		fh->is_cdrom = is_cdrom;

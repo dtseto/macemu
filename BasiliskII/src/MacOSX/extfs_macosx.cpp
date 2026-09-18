@@ -102,6 +102,9 @@ static bool check_xattr(void)
 void extfs_init(void)
 {
 	g_use_xattrs = check_xattr();
+	// The current ExtFS implementation has no stat cache; keep this diagnostic
+	// at subsystem initialization rather than in file-operation hot paths.
+	printf("B2_OPT path=extfs_stat_cache fallback reason=no_stat_cache_implementation\n");
 }
 
 

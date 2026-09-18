@@ -265,6 +265,20 @@ void TimerInit(void)
 {
 	TimerReset();
 
+#if PRECISE_TIMING_MACH
+	printf("B2_OPT path=monotonic_timer fallback reason=mach_realtime_clock_path\n");
+#elif PRECISE_TIMING_POSIX
+#if defined(CLOCK_MONOTONIC)
+	printf("B2_OPT path=monotonic_timer active\n");
+#else
+	printf("B2_OPT path=monotonic_timer fallback reason=clock_monotonic_unavailable\n");
+#endif
+#elif PRECISE_TIMING
+	printf("B2_OPT path=monotonic_timer fallback reason=timer_backend_not_monotonic\n");
+#else
+	printf("B2_OPT path=monotonic_timer fallback reason=precise_timing_unavailable\n");
+#endif
+
 #if PRECISE_TIMING
 	// Start timer thread
 #ifdef PRECISE_TIMING_BEOS
