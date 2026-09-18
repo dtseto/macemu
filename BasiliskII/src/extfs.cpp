@@ -42,6 +42,8 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <string>
+#include <vector>
 
 #ifndef WIN32
 #include <unistd.h>
@@ -209,6 +211,8 @@ struct FSItem {
 	char guest_name[32];	// Object name (C string) - Guest OS
 	time_t mtime;			// Modification time for get_cat_info caching
 	int cache_dircount;		// Cached number of files in directory
+	time_t directory_cache_mtime;
+	std::vector<std::string> directory_entries;	// Visible entries, in host enumeration order
 };
 
 static FSItem *first_fs_item, *last_fs_item;
@@ -287,6 +291,8 @@ static FSItem *create_fsitem(const char *name, const char *guest_name, FSItem *p
 	strncpy(p->guest_name, guest_name, 31);
 	p->guest_name[31] = 0;
 	p->mtime = 0;
+	p->cache_dircount = 0;
+	p->directory_cache_mtime = 0;
 	return p;
 }
 
@@ -346,6 +352,39 @@ static void get_path_for_fsitem(FSItem *p)
 		get_path_for_fsitem(p->parent);
 		add_path_comp(p->name);
 	}
+}
+
+// Return the requested 1-based visible directory entry, rebuilding the cache
+// only when the host directory's metadata has changed.
+static const char *get_cached_directory_entry(FSItem *directory, int index)
+{
+	if (index <= 0)
+		return NULL;
+
+	struct stat directory_stat;
+	if (stat_cached(full_path, &directory_stat) < 0 || !S_ISDIR(directory_stat.st_mode))
+		return NULL;
+
+	if (directory->directory_entries.empty() ||
+		directory->directory_cache_mtime != directory_stat.st_mtime) {
+		directory->directory_entries.clear();
+		DIR *d = opendir(full_path);
+		if (d == NULL)
+			return NULL;
+		for (;;) {
+			struct dirent *de = readdir(d);
+			if (de == NULL)
+				break;
+			if (de->d_name[0] != '.')
+				directory->directory_entries.push_back(de->d_name);
+		}
+		closedir(d);
+		directory->directory_cache_mtime = directory_stat.st_mtime;
+		directory->cache_dircount = (int)directory->directory_entries.size();
+	}
+
+	return index <= (int)directory->directory_entries.size()
+		? directory->directory_entries[index - 1].c_str() : NULL;
 }
 
 
@@ -466,6 +505,9 @@ void ExtFSInit(void)
 	p->name = new char[1];
 	p->name[0] = 0;
 	p->guest_name[0] = 0;
+	p->mtime = 0;
+	p->cache_dircount = 0;
+	p->directory_cache_mtime = 0;
 
 	// Create root FSItem
 	p = new FSItem;
@@ -480,6 +522,9 @@ void ExtFSInit(void)
 	strcpy(p->name, volume_name);
 	strncpy(p->guest_name, host_encoding_to_macroman(p->name), 32);
 	p->guest_name[31] = 0;
+	p->mtime = 0;
+	p->cache_dircount = 0;
+	p->directory_cache_mtime = 0;
 
 	// Find path for root
 	*RootPath = 0;
@@ -1322,27 +1367,14 @@ static int16 fs_get_file_info(uint32 pb, bool hfs, uint32 dirID)
 			return dirNFErr;
 		get_path_for_fsitem(p);
 
-		// Look for nth item in directory and add name to path
-		DIR *d = opendir(full_path);
-		if (d == NULL)
-			return dirNFErr;
-		struct dirent *de = NULL;
-		for (int i=0; i<dir_index; i++) {
-read_next_de:
-			de = readdir(d);
-			if (de == NULL) {
-				closedir(d);
-				return fnfErr;
-			}
-			if (de->d_name[0] == '.')
-				goto read_next_de;	// Suppress names beginning with '.' (MacOS could interpret these as driver names)
-			//!! suppress directories
-		}
-		add_path_comp(de->d_name);
+		// Look for nth item in directory and add name to path.
+		const char *entry_name = get_cached_directory_entry(p, dir_index);
+		if (entry_name == NULL)
+			return fnfErr;
+		add_path_comp(entry_name);
 
 		// Get FSItem for queried item
-		fs_item = find_fsitem(de->d_name, p);
-		closedir(d);
+		fs_item = find_fsitem(entry_name, p);
 	}
 
 	// Get stats
@@ -1446,26 +1478,14 @@ static int16 fs_get_cat_info(uint32 pb)
 			return dirNFErr;
 		get_path_for_fsitem(p);
 
-		// Look for nth item in directory and add name to path
-		DIR *d = opendir(full_path);
-		if (d == NULL)
-			return dirNFErr;
-		struct dirent *de = NULL;
-		for (int i=0; i<dir_index; i++) {
-read_next_de:
-			de = readdir(d);
-			if (de == NULL) {
-				closedir(d);
-				return fnfErr;
-			}
-			if (de->d_name[0] == '.')
-				goto read_next_de;	// Suppress names beginning with '.' (MacOS could interpret these as driver names)
-		}
-		add_path_comp(de->d_name);
+		// Look for nth item in directory and add name to path.
+		const char *entry_name = get_cached_directory_entry(p, dir_index);
+		if (entry_name == NULL)
+			return fnfErr;
+		add_path_comp(entry_name);
 
 		// Get FSItem for queried item
-		fs_item = find_fsitem(de->d_name, p);
-		closedir(d);
+		fs_item = find_fsitem(entry_name, p);
 	}
 	D(bug("  path %s\n", full_path));
 
