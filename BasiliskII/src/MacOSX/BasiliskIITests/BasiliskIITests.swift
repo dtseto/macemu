@@ -286,6 +286,56 @@ struct BenchmarkHarnessTests {
         #expect(sdl3.contains("B2_OPT path=SDL2_dirty_rects fallback reason=SDL3_backend_selected"))
     }
 
+    @Test("Non-video optimization diagnostics cover active and fallback paths")
+    func nonVideoOptimizationDiagnosticsAreGatedAndOneShot() throws {
+        let ethernet = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/Unix/ether_unix.cpp"), encoding: .utf8)
+        let extfs = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/extfs_macosx.cpp"), encoding: .utf8)
+        let system = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/Unix/sys_unix.cpp"), encoding: .utf8)
+        let bincue = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/bincue.cpp"), encoding: .utf8)
+        let timer = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/timer.cpp"), encoding: .utf8)
+        let sysdeps = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/Unix/sysdeps.h"), encoding: .utf8)
+        let vosf = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/video_sdl3.cpp"), encoding: .utf8)
+
+        #expect(ethernet.contains("#define USE_POLL 1"))
+        #expect(ethernet.contains("poll(&pf, 1, -1)"))
+        #expect(ethernet.contains("select(fd + 1"))
+        #expect(ethernet.contains("B2_OPT path=ethernet_poll active"))
+        #expect(ethernet.contains("B2_OPT path=ethernet_poll fallback reason=poll_unavailable"))
+        #expect(ethernet.contains("B2_OPT path=adaptive_slirp_timeout active"))
+        #expect(ethernet.contains("B2_OPT path=adaptive_slirp_timeout fallback reason=slirp_interface_not_selected"))
+        #expect(ethernet.contains("static bool ethernet_optimization_diagnostics_reported = false"))
+
+        #expect(extfs.contains("void extfs_init(void)"))
+        #expect(extfs.contains("B2_OPT path=extfs_stat_cache fallback reason=no_stat_cache_implementation"))
+
+        #expect(system.contains("pread(fh->fd, buffer, length, file_offset)"))
+        #expect(system.contains("pwrite(fh->fd, buffer, length, file_offset)"))
+        #expect(system.contains("lseek(fh->fd, file_offset, SEEK_SET)"))
+        #expect(system.contains("B2_OPT path=regular_file_pread_pwrite active"))
+        #expect(system.contains("B2_OPT path=regular_file_pread_pwrite fallback reason=special_file_shared_offset"))
+        #expect(system.contains("static bool regular_file_pread_diagnostic_reported = false"))
+
+        #expect(bincue.contains("pread(cs->binfh"))
+        #expect(system.contains("#if defined(BINCUE)"))
+        #expect(system.contains("B2_OPT path=bincue_positional_reads active"))
+        #expect(system.contains("B2_OPT path=bincue_positional_reads fallback reason=compiled_out"))
+        #expect(system.contains("static bool bincue_active_diagnostic_reported = false"))
+
+        #expect(sysdeps.contains("#define PRECISE_TIMING_POSIX 1"))
+        #expect(sysdeps.contains("#define PRECISE_TIMING_MACH 1"))
+        #expect(timer.contains("CLOCK_MONOTONIC"))
+        #expect(timer.contains("B2_OPT path=monotonic_timer active"))
+        #expect(timer.contains("B2_OPT path=monotonic_timer fallback reason=mach_realtime_clock_path"))
+        #expect(timer.contains("B2_OPT path=monotonic_timer fallback reason=precise_timing_unavailable"))
+
+        #expect(vosf.contains("#ifdef ENABLE_VOSF"))
+        #expect(vosf.contains("video_vosf_profitable"))
+        #expect(vosf.contains("B2_OPT path=VOSF_policy active"))
+        #expect(vosf.contains("report_vosf_policy(false, \"compiled_out\")"))
+        #expect(vosf.contains("B2_OPT path=VOSF_diagnostics active"))
+        #expect(vosf.contains("static bool vosf_policy_reported = false"))
+    }
+
     private func section(in source: String, from start: String, through end: String) throws -> String {
         let startRange = try #require(source.range(of: start))
         let endRange = try #require(source.range(of: end, range: startRange.upperBound..<source.endIndex))
