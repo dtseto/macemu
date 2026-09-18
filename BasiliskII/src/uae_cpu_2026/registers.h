@@ -104,7 +104,7 @@ extern struct regstruct
     /* Cache reg*/
     uae_u32 cacr,caar;
 
-#if defined(USE_JIT) && (defined(CPU_arm) || defined(CPU_aarch64) || defined(CPU_AARCH64))
+#if USE_JIT && (defined(CPU_arm) || defined(CPU_aarch64) || defined(CPU_AARCH64))
     /* Integer JIT scratch spill backing. Keep this in lockstep with
        compiler/compemu_arm.h:SCRATCH_REGS (S1..S5). */
     uae_u32 scratchregs[5];

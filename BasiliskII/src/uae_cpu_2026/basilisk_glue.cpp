@@ -328,7 +328,7 @@ static bool run_opcode_test_mode_glue()
 		quit_program = 1;
 		return true;
 	}
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 	jit_invalidate_host_code_write(test_addr, (uae_u32)((n_words + 1) * 2));
 #endif
 
@@ -391,7 +391,7 @@ static bool run_opcode_test_mode_glue()
 			for (size_t i = 0; i < rewrite_count; i++)
 				put_word(test_addr + (uaecptr)(i * 2), rewrite_words[i]);
 			put_word(test_addr + (uaecptr)(rewrite_count * 2), M68K_EXEC_RETURN);
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 			jit_invalidate_host_code_write(test_addr,
 				(uae_u32)((rewrite_count + 1) * 2));
 #endif
@@ -495,7 +495,7 @@ static bool run_opcode_test_mode_glue()
 			m68k_setpc(second_addr);
 			fill_prefetch_0();
 			quit_program = 0;
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 			if (UseJIT) {
 				extern bool jit_test_prepare_direct_checksum_entry(void);
 				extern bool jit_test_prepare_direct_execute_normal_entry(void);
@@ -536,7 +536,7 @@ static bool run_opcode_test_mode_glue()
 		}
 	}
 
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 	extern void jit_test_dump_dispatch_summary(void);
 	jit_test_dump_dispatch_summary();
 #endif
@@ -768,7 +768,7 @@ void Execute68kTrap(uint16 trap, struct M68kRegisters *r)
 	put_word(m68k_areg(regs, 7), M68K_EXEC_RETURN);
 	m68k_areg(regs, 7) -= 2;
 	put_word(m68k_areg(regs, 7), trap);
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 	jit_invalidate_host_code_write(m68k_areg(regs, 7), 4);
 #endif
 
@@ -823,7 +823,7 @@ void Execute68k(uint32 addr, struct M68kRegisters *r)
 	put_word(m68k_areg(regs, 7), M68K_EXEC_RETURN);
 	m68k_areg(regs, 7) -= 4;
 	put_long(m68k_areg(regs, 7), m68k_areg(regs, 7) + 4);
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 	jit_invalidate_host_code_write(m68k_areg(regs, 7), 6);
 #endif
 

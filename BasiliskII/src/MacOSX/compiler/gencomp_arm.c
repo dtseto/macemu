@@ -4628,7 +4628,7 @@ gen_opcode(unsigned long int opcode) {
 		break;
 	case i_FPP:
 		uses_fpu;
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 		mayfail;
 		comprintf("\tuae_u16 extra=%s;\n",gen_nextiword());
 		swap_opcode();
@@ -4639,7 +4639,7 @@ gen_opcode(unsigned long int opcode) {
 		break;
 	case i_FBcc:
 		uses_fpu;
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 		isjump;
 		uses_cmov;
 		mayfail;
@@ -4657,7 +4657,7 @@ gen_opcode(unsigned long int opcode) {
 		break;
 	case i_FScc:
 		uses_fpu;
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 		mayfail;
 		uses_cmov;
 		comprintf("\tuae_u16 extra=%s;\n",gen_nextiword());

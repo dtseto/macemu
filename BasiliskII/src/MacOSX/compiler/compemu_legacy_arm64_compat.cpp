@@ -2515,7 +2515,7 @@ extern "C" void jit_op_trapcc(void)
  * JIT FPU shadow register sync (MPFR ↔ double)
  * Called at JIT block boundaries when USE_JIT_FPU is enabled.
  * ================================================================ */
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 #include "fpu/fpu.h"
 #include <cmath>
 #include <cstring>

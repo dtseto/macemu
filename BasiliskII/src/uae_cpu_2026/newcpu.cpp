@@ -377,7 +377,7 @@ extern "C" void basilisk_trace_dump_recent(const char *reason, uaecptr addr, uae
 			(unsigned)e.a0, (unsigned)e.a3, (unsigned)e.a4, (unsigned)e.a5, (unsigned)e.a6);
 	}
 }
-#ifdef USE_JIT
+#if USE_JIT
 # include "compiler/compemu.h"
 #endif
 #include "fpu/fpu.h"
@@ -1066,7 +1066,7 @@ void Exception(int nr, uaecptr oldpc)
             (unsigned)get_word(m68k_areg(regs,7)),
             (unsigned)get_long(m68k_areg(regs,7) + 2));
     }
-#ifdef USE_JIT
+#if USE_JIT
     if (UseJIT)
         SPCFLAGS_SET( SPCFLAG_JIT_END_COMPILE );
 #endif
@@ -1132,7 +1132,7 @@ int m68k_move2c (int regno, uae_u32 *regp)
 	 case 0: regs.sfc = *regp & 7; break;
 	 case 1: regs.dfc = *regp & 7; break;
 	 case 2: regs.cacr = *regp & 0x80008000;
-#ifdef USE_JIT
+#if USE_JIT
 		 set_cache_state(regs.cacr & 0x8000);
 		 if (*regp & 0x08) {	/* Just to be on the safe side */
 			flush_icache();
@@ -1444,7 +1444,7 @@ void m68k_mull (uae_u32 /*opcode*/, uae_u32 src, uae_u16 extra)
 // If value is greater than zero, this means we are still processing an EmulOp
 // because the counter is incremented only in m68k_execute(), i.e. interpretive
 // execution only
-#ifdef USE_JIT
+#if USE_JIT
 static int m68k_execute_depth = 0;
 #endif
 
@@ -1693,7 +1693,7 @@ static int m68k_call(uae_u32 pc)
 	VOLATILE int exc = 0;
 	m68k_setpc(pc);
     TRY(prb) {
-#ifdef USE_JIT
+#if USE_JIT
 		if (UseJIT) {
 			exec_nostats();
 			//			m68k_do_compile_execute();
@@ -1817,7 +1817,7 @@ void REGPARAM2 op_illg (uae_u32 opcode)
 	}
 
 	D(bug("Illegal instruction: %04x at %08x", opcode, m68k_getpc()));
-#if defined(USE_JIT) && defined(JIT_DEBUG)
+#if USE_JIT && defined(JIT_DEBUG)
 	compiler_dumpstate();
 #endif
 
@@ -2036,7 +2036,7 @@ int m68k_do_specialties(void)
 			specialties_logs++;
 		}
 	}
-#ifdef USE_JIT
+#if USE_JIT
 	if (UseJIT) {
 		// Block was compiled
 		SPCFLAGS_CLEAR( SPCFLAG_JIT_END_COMPILE );
@@ -2389,7 +2389,7 @@ void m68k_do_execute (void)
 	}
 #endif
     for (;;) {
-#ifdef USE_JIT
+#if USE_JIT
 	if (!UseJIT)
 		SPCFLAGS_CLEAR(SPCFLAG_JIT_END_COMPILE | SPCFLAG_JIT_EXEC_RETURN);
 #endif
@@ -2625,7 +2625,7 @@ interpreter_dispatch_complete:
 
 void m68k_execute (void)
 {
-#ifdef USE_JIT
+#if USE_JIT
     m68k_execute_depth++;
 #endif
 #ifdef DEBUGGER
@@ -2649,7 +2649,7 @@ setjmpagain:
 	    if (debugging && !after_exception) debug();
 	    after_exception = false;
 #endif
-#ifdef USE_JIT
+#if USE_JIT
 	    if (UseJIT)
 		m68k_do_compile_execute();
 	    else
@@ -2665,7 +2665,7 @@ setjmpagain:
     	goto setjmpagain;
     }
 
-#ifdef USE_JIT
+#if USE_JIT
     m68k_execute_depth--;
 #endif
 }

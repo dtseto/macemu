@@ -599,7 +599,7 @@ STATIC_INLINE uae_u32* compemu_raw_endblock_pc_isconst(IM32 cycles, IMPTR v)
 * FPU stuff                                                             *
 *************************************************************************/
 
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 
 LOWFUNC(NONE,NONE,2,raw_fmov_rr,(FW d, FR s))
 {

@@ -2373,7 +2373,7 @@ bool fpu_test_set_register_extended(int reg, uae_u32 word0, uae_u32 word1, uae_u
 	set_format(EXTENDED_PREC);
 	set_from_extended(fpu.registers[reg], words, false);
 	set_format(get_cur_prec());
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 	/* The replay seed is authoritative architectural state.  A dirty native
 	 * binary64 shadow from the trace pass must not overwrite it at fallback. */
 	regs.jit_fp_dirty_mask &= ~(1u << reg);

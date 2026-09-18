@@ -633,14 +633,14 @@ static uae_u32		current_cache_size	= 0;		// Cache grows upwards: how much has be
 static bool		lazy_flush		= true;	// Flag: lazy translation cache invalidation
 // Flag: compile FPU instructions ?
 #ifdef UAE
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 #define avoid_fpu (!currprefs.compfpu)
 #else
 #define avoid_fpu (true)
 #endif
 #else
 static bool avoid_fpu = true; // Flag: compile FPU instructions ?
-// #ifdef USE_JIT_FPU
+// #if USE_JIT_FPU
 // #define avoid_fpu (!bx_options.jit.jitfpu)
 // #else
 // #define avoid_fpu (true)
@@ -3267,7 +3267,7 @@ void compiler_init(void)
 #endif
 	jit_log("<JIT compiler> : enable runtime disassemblers : %s", JITDebug ? "yes" : "no");
 
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 	// Use JIT compiler for FPU instructions ?
 	avoid_fpu = !PrefsFindBool("jitfpu");
 #else
@@ -4532,7 +4532,7 @@ static int read_opcode(const char *p)
 }
 
 
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 static struct {
 	const char *name;
 	bool *const disabled;
@@ -4620,7 +4620,7 @@ static bool merge_blacklist()
 #else
 	const char *blacklist = PrefsFindString("jitblacklist");
 #endif
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 	for (unsigned int i = 0; i < (sizeof(jit_opcodes) / sizeof(jit_opcodes[0])); i++)
 		*jit_opcodes[i].disabled = false;
 #endif
@@ -4633,7 +4633,7 @@ static bool merge_blacklist()
 			int opcode1 = read_opcode(p);
 			if (opcode1 < 0)
 			{
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 				if (read_fpu_opcode(&p))
 					continue;
 #endif

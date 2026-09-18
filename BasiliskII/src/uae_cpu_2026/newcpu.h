@@ -80,7 +80,7 @@ struct cputbl {
 
 extern cpuop_func *cpufunctbl[65536];
 
-#ifdef USE_JIT
+#if USE_JIT
 typedef void compop_func (uae_u32) REGPARAM;
 
 struct comptbl {
@@ -205,7 +205,7 @@ static inline uae_u32 next_ilong (void)
     return r;
 }
 
-#ifdef USE_JIT
+#if USE_JIT
 extern "C" uae_u32 jit_current_interp_pc;
 extern "C" uae_u32 jit_current_interp_opcode;
 #endif
@@ -222,7 +222,7 @@ static inline void m68k_setpc (uaecptr newpc)
                 (unsigned)newpc,
                 __builtin_return_address(0),
                 (unsigned)regs.pc,
-#ifdef USE_JIT
+#if USE_JIT
                 (unsigned)jit_current_interp_pc,
                 (unsigned)jit_current_interp_opcode,
 #else
@@ -312,7 +312,7 @@ extern void m68k_mull (uae_u32, uae_u32, uae_u16);
 extern void m68k_emulop (uae_u32);
 extern void m68k_emulop_return (void);
 extern void m68k_dispatch_emulop (uae_u32);
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 extern void jit_invalidate_host_code_write (uae_u32 address, uae_u32 size);
 #endif
 extern void m68k_natfeat_id(void);
@@ -348,7 +348,7 @@ extern void m68k_record_step(uaecptr, int);
 
 extern void m68k_do_execute(void);
 extern void m68k_execute(void);
-#ifdef USE_JIT
+#if USE_JIT
 extern void m68k_compile_execute(void);
 extern void m68k_do_compile_execute(void);
 #endif

@@ -358,7 +358,7 @@ swap_opcode (void)
 #ifdef UAE
 	/* no-op */
 #else
-	comprintf("#ifdef USE_JIT_FPU\n");
+	comprintf("#if USE_JIT_FPU\n");
 	comprintf("#if defined(HAVE_GET_WORD_UNSWAPPED) && !defined(FULLMMU)\n");
 	comprintf("\topcode = do_byteswap_16(opcode);\n");
 	comprintf("#endif\n");
@@ -3763,7 +3763,7 @@ gen_opcode (unsigned int opcode)
 #endif
 	uses_fpu;
 	mayfail;
-	comprintf("#ifdef USE_JIT_FPU\n");
+	comprintf("#if USE_JIT_FPU\n");
 	comprintf("\tuae_u16 extra=%s;\n",gen_nextiword());
 	swap_opcode();
 	comprintf("\tcomp_fpp_opp(opcode,extra);\n");
@@ -3780,7 +3780,7 @@ gen_opcode (unsigned int opcode)
 	isjump;
 	uses_cmov;
 	mayfail;
-	comprintf("#ifdef USE_JIT_FPU\n");
+	comprintf("#if USE_JIT_FPU\n");
 	swap_opcode();
 	comprintf("\tcomp_fbcc_opp(opcode);\n");
 	comprintf("#else\n");
@@ -3801,7 +3801,7 @@ gen_opcode (unsigned int opcode)
 	uses_fpu;
 	mayfail;
 	uses_cmov;
-	comprintf("#ifdef USE_JIT_FPU\n");
+	comprintf("#if USE_JIT_FPU\n");
 	comprintf("\tuae_u16 extra=%s;\n",gen_nextiword());
 	swap_opcode();
 	comprintf("\tcomp_fscc_opp(opcode,extra);\n");

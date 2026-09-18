@@ -194,7 +194,7 @@ extern void build_comp(void);
 extern void set_cache_state(int enabled);
 extern int get_cache_state(void);
 extern uae_u32 get_jitted_size(void);
-#ifdef USE_JIT
+#if USE_JIT
 extern void (*flush_icache)(void);
 #endif
 extern void alloc_cache(void);

@@ -1912,7 +1912,7 @@ uae_u8* comp_pc_p;
 
 static uae_u32 cache_size = 0;            // Size of total cache allocated for compiled blocks
 static uae_u32 current_cache_size   = 0;  // Cache grows upwards: how much has been consumed already
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 #define avoid_fpu (!currprefs.compfpu)
 #define lazy_flush (!currprefs.comp_hardflush)
 #else
@@ -4479,7 +4479,7 @@ static void prepare_for_call_2(void)
             free_nreg(i);
     }
 
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     for (i = 6; i <= 7; i++) // only FP_RESULT and FS1, FP0-FP7 are call save
         if (live.fat[i].nholds > 0)
             f_free_nreg(i);
@@ -5879,7 +5879,7 @@ static void init_comp(void)
 
     for (i = 0; i < VFREGS; i++) {
         if (i < 8) { /* First 8 registers map to 68k FPU registers */
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
             /* Use shadow double array instead of fpu.registers[] (mpfr_t) */
             live.fate[i].mem = (uae_u32*)&regs.jit_fpregs[i];
 #else
@@ -5888,7 +5888,7 @@ static void init_comp(void)
             live.fate[i].needflush = NF_TOMEM;
             live.fate[i].status = INMEM;
         } else if (i == FP_RESULT) {
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
             live.fate[i].mem = (uae_u32*)&regs.jit_fp_result;
 #else
             live.fate[i].mem = (uae_u32*)(&regs.fp_result);
@@ -5896,7 +5896,7 @@ static void init_comp(void)
             live.fate[i].needflush = NF_TOMEM;
             live.fate[i].status = INMEM;
         } else {
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
             live.fate[i].mem = (uae_u32*)&regs.jit_scratchfregs[i - 8 - 1];
 #else
             live.fate[i].mem = (uae_u32*)(&regs.scratchfregs[i - 8]);
@@ -6061,7 +6061,7 @@ static void freescratch(void)
     for (i = 0; i < SCRATCH_REGS; ++i)
         live.scratch_in_use[i] = 0;
 
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     f_forget_about(FS1);
 #endif
 }
@@ -6981,7 +6981,7 @@ STATIC_INLINE void create_popalls(void)
     current_compile_p = get_target();
     pushall_call_handler = get_target();
     raw_push_regs_to_preserve();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     /* Interpreter/C code owns the architectural MPFR state; every fresh JIT
        entry must import both FP registers and FPSR condition state. Direct
        native chains intentionally retain the existing shadows. */
@@ -7019,7 +7019,7 @@ STATIC_INLINE void create_popalls(void)
 #endif
     popall_execute_normal = get_target();
     /* No fast dispatch for now - just the slow path */
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
 #endif
     raw_pop_preserved_regs();
@@ -7038,7 +7038,7 @@ STATIC_INLINE void create_popalls(void)
     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
 #endif
     popall_check_checksum = get_target();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
 #endif
     raw_pop_preserved_regs();
@@ -7057,35 +7057,35 @@ STATIC_INLINE void create_popalls(void)
     STR_rRI(REG_WORK1, R_REGSTRUCT, idx);
 #endif
     popall_exec_nostats = get_target();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
 #endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)exec_nostats);
 
     popall_recompile_block = get_target();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
 #endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)recompile_block);
 
     popall_do_nothing = get_target();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
 #endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)do_nothing);
 
     popall_cache_miss = get_target();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
     compemu_raw_call((uintptr)jit_fpu_sync_from_shadow);
 #endif
     raw_pop_preserved_regs();
     compemu_raw_jmp((uintptr)cache_miss);
 
     popall_execute_exception = get_target();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 #if defined(CPU_AARCH64)
     /* execute_exception's retired-cycle argument arrives in W0. The FPU shadow
        sync is an AAPCS64 C call and may clobber X0, so preserve the complete
@@ -8721,7 +8721,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                        every association before crossing the first C boundary. */
                     prepare_for_call_1();
                     prepare_for_call_2();
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
                     /* The interpreter now owns architectural MPFR state. First
                        publish only native-dirty shadows, then re-import the
                        serviced result and clear ownership before any following
@@ -8733,7 +8733,7 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                     compemu_raw_mov_l_ri(REG_PAR1, (uae_u32)opcode);
                     compemu_raw_mov_l_rr(REG_PAR2, R_REGSTRUCT);
                     compemu_raw_call((uintptr)cputbl[opcode]);
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
                     compemu_raw_call_preserve_nzcv((uintptr)jit_fpu_sync_to_shadow);
 #endif
                     /* The C opcode owns architectural CCR in regflags, while

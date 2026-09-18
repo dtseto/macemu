@@ -855,7 +855,7 @@ static inline void emit_jmp_target(uae_u32 a) {
 * FPU stuff                                                             *
 *************************************************************************/
 
-#ifdef USE_JIT_FPU
+#if USE_JIT_FPU
 
 MIDFUNC(1,f_forget_about,(FW r))
 {

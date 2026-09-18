@@ -210,7 +210,7 @@ static __inline__ uae_u32 get_byte(uaecptr addr)
     return v;
 }
 #define phys_get_byte get_byte
-#if defined(USE_JIT) && (defined(CPU_AARCH64) || defined(CPU_aarch64))
+#if USE_JIT && (defined(CPU_AARCH64) || defined(CPU_aarch64))
 extern void jit_notify_guest_memory_write(uae_u32 address, uae_u32 size);
 #define JIT_NOTIFY_GUEST_WRITE(addr, size) jit_notify_guest_memory_write((addr), (size))
 #else
