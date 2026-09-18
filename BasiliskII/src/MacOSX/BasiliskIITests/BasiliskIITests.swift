@@ -67,6 +67,20 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("raise(SIGTRAP)"))
     }
 
+    @Test("Generated threaded dispatch is opt-in and has a compiler fallback")
+    func generatedThreadedDispatchIsFailsafe() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2026/gencpu.c"),
+            encoding: .utf8
+        )
+        #expect(source.contains("--dispatch=goto"))
+        #expect(source.contains("cpuemu_threaded.cpp"))
+        #expect(source.contains("defined(__GNUC__) || defined(__clang__)"))
+        #expect(source.contains("cpufunctbl[opcode](opcode)"))
+        #expect(source.contains("goto *targets[opcode]"))
+        #expect(source.contains("opcode_%04x"))
+    }
+
     @Test("Audio shutdown releases callback before closing SDL")
     func audioShutdownOrdering() throws {
         let source = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/audio_sdl.cpp"), encoding: .utf8)
