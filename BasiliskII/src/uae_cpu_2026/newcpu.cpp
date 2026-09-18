@@ -2209,6 +2209,18 @@ static bool interpreter_dispatch_metrics_enabled()
 	return cached != 0;
 }
 
+#if defined(__GNUC__) || defined(__clang__)
+static bool interpreter_threaded_prototype_enabled()
+{
+	static int cached = -1;
+	if (cached < 0) {
+		const char *enabled = getenv("B2_INTERP_THREADED_PROTO");
+		cached = enabled && enabled[0] && strcmp(enabled, "0") != 0 ? 1 : 0;
+	}
+	return cached != 0;
+}
+#endif
+
 static void interpreter_dispatch_breakpoint(uae_u32 pc, uae_u16 opcode)
 {
 	static int initialized = 0;
@@ -2238,6 +2250,21 @@ void m68k_do_execute (void)
     static uae_u32 nojit_pc_min = 0xFFFFFFFF;
     static uae_u32 nojit_pc_max = 0;
     static unsigned long trace_window_count = 0;
+	cpuop_func *handler = NULL;
+#if defined(__GNUC__) || defined(__clang__)
+	static void *threaded_targets[65536];
+	static bool threaded_targets_initialized = false;
+	const bool threaded_prototype = interpreter_threaded_prototype_enabled();
+	if (threaded_prototype && !threaded_targets_initialized) {
+		for (unsigned i = 0; i < 65536; i++)
+			threaded_targets[i] = &&interpreter_threaded_fallback;
+		threaded_targets[0x4e71] = &&interpreter_threaded_nop;
+		threaded_targets[0x4e75] = &&interpreter_threaded_rts;
+		for (unsigned i = 0x7000; i <= 0x70ff; i++)
+			threaded_targets[i] = &&interpreter_threaded_moveq;
+		threaded_targets_initialized = true;
+	}
+#endif
     for (;;) {
 #ifdef USE_JIT
 	if (!UseJIT)
@@ -2344,8 +2371,28 @@ void m68k_do_execute (void)
 	if (interpreter_dispatch_metrics_enabled())
 		interpreter_dispatch_count++;
 	interpreter_dispatch_breakpoint(pc, (uae_u16)opcode);
-	cpuop_func *handler = cpufunctbl[opcode];
+	handler = cpufunctbl[opcode];
+#if defined(__GNUC__) || defined(__clang__)
+	if (threaded_prototype)
+		goto *threaded_targets[opcode];
+#endif
 	(*handler)(opcode);
+	goto interpreter_dispatch_complete;
+#if defined(__GNUC__) || defined(__clang__)
+interpreter_threaded_fallback:
+	(*handler)(opcode);
+	goto interpreter_dispatch_complete;
+interpreter_threaded_nop:
+	(*handler)(opcode);
+	goto interpreter_dispatch_complete;
+interpreter_threaded_rts:
+	(*handler)(opcode);
+	goto interpreter_dispatch_complete;
+interpreter_threaded_moveq:
+	(*handler)(opcode);
+	goto interpreter_dispatch_complete;
+#endif
+interpreter_dispatch_complete:
 	if (trace_a995_pending && trace_a995_step < 64) {
 		MakeSR();
 		fprintf(stderr,

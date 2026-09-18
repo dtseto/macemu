@@ -59,7 +59,9 @@ struct BenchmarkHarnessTests {
         )
         #expect(source.contains("B2_INTERP_DISPATCH_METRICS"))
         #expect(source.contains("B2_INTERP_BREAK_OPCODE"))
-        #expect(source.contains("cpuop_func *handler = cpufunctbl[opcode]"))
+        #expect(source.contains("B2_INTERP_THREADED_PROTO"))
+        #expect(source.contains("threaded_targets[0x4e71]"))
+        #expect(source.contains("cpuop_func *handler = NULL"))
         #expect(source.contains("raise(SIGTRAP)"))
     }
 
