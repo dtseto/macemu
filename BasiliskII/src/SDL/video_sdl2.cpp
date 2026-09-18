@@ -170,6 +170,23 @@ static int benchmark_vosf_accepted = -1;
 static uint32 benchmark_vosf_duration_usec = 0;
 static uint32 benchmark_vosf_page_faults = 0;
 static uint32 benchmark_vosf_threshold_usec = 0;
+static bool optimization_paths_reported = false;
+static bool palette_optimization_reported = false;
+
+static void report_video_optimization_paths(void)
+{
+	if (optimization_paths_reported)
+		return;
+	optimization_paths_reported = true;
+	printf("B2_OPT path=SDL2_dirty_rects active\n");
+	printf("B2_OPT path=SDL_present_skip active\n");
+#ifdef __aarch64__
+	printf("B2_OPT path=NEON_dirty_detection active\n");
+#else
+	printf("B2_OPT path=NEON_dirty_detection fallback reason=NEON_unavailable\n");
+#endif
+	printf("B2_OPT path=SDL3_native fallback reason=SDL2_backend_selected\n");
+}
 
 static void report_video_metrics(void)
 {
@@ -984,6 +1001,13 @@ static int present_sdl_video()
 		printf("WARNING: A video mode does not appear to have been set.\n");
 		return -1;
 	}
+	if (!palette_optimization_reported) {
+		palette_optimization_reported = true;
+		if (host_surface && guest_surface->format->BitsPerPixel == 8 && host_surface->format->BytesPerPixel == 4)
+			printf("B2_OPT path=palette_expansion active\n");
+		else
+			printf("B2_OPT path=palette_expansion fallback reason=indexed_path_not_selected\n");
+	}
 
 	// Some systems, such as D3D9, can fail if and when they are used across
 	// certain operations.  To address this, only utilize SDL_Renderer in a
@@ -1504,6 +1528,7 @@ bool VideoInit(bool classic)
 {
 #endif
 	classic_mode = classic;
+	report_video_optimization_paths();
 	static bool did_init_benchmark_metrics = false;
 	if (!did_init_benchmark_metrics) {
 		const char *enabled = getenv("B2_BENCHMARK_METRICS");

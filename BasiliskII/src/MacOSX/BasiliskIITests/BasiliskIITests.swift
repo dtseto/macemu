@@ -255,6 +255,37 @@ struct BenchmarkHarnessTests {
     }
 #endif
 
+    @Test("SDL optimization diagnostics describe gated paths once")
+    func sdlOptimizationDiagnosticsAreGatedAndOneShot() throws {
+        let sdl2 = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/video_sdl2.cpp"),
+            encoding: .utf8
+        )
+        let sdl3 = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/video_sdl3.cpp"),
+            encoding: .utf8
+        )
+
+        #expect(sdl2.contains("#if SDL_VERSION_ATLEAST(2, 0, 0) && !SDL_VERSION_ATLEAST(3, 0, 0)"))
+        #expect(sdl3.contains("#if SDL_VERSION_ATLEAST(3, 0, 0)"))
+        for source in [sdl2, sdl3] {
+            #expect(source.contains("sdl_update_video_rect"))
+            #expect(source.contains("SDL_RectEmpty(&sdl_update_video_rect)"))
+            #expect(source.contains("B2_OPT path=SDL_present_skip active"))
+            #expect(source.contains("B2_OPT path=NEON_dirty_detection active"))
+            #expect(source.contains("B2_OPT path=NEON_dirty_detection fallback reason=NEON_unavailable"))
+            #expect(source.contains("B2_OPT path=palette_expansion active"))
+            #expect(source.contains("B2_OPT path=palette_expansion fallback reason=indexed_path_not_selected"))
+            #expect(source.contains("static bool optimization_paths_reported = false"))
+            #expect(source.contains("if (optimization_paths_reported)"))
+            #expect(source.contains("static bool palette_optimization_reported = false"))
+            #expect(source.contains("if (!palette_optimization_reported)"))
+        }
+        #expect(sdl2.contains("B2_OPT path=SDL3_native fallback reason=SDL2_backend_selected"))
+        #expect(sdl3.contains("B2_OPT path=SDL3_native active"))
+        #expect(sdl3.contains("B2_OPT path=SDL2_dirty_rects fallback reason=SDL3_backend_selected"))
+    }
+
     private func section(in source: String, from start: String, through end: String) throws -> String {
         let startRange = try #require(source.range(of: start))
         let endRange = try #require(source.range(of: end, range: startRange.upperBound..<source.endIndex))
