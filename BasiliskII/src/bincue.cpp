@@ -596,6 +596,8 @@ void close_bincue(void *fh)
 size_t read_bincue(void *fh, void *b, loff_t offset, size_t len)
 {
 	CueSheet *cs = (CueSheet *) fh;
+	if (cs == NULL)
+		return -1;
 	
 	size_t bytes_read = 0;						// bytes read so far
 	unsigned char *buf = (unsigned char *) b;	// target buffer
@@ -609,9 +611,6 @@ size_t read_bincue(void *fh, void *b, loff_t offset, size_t len)
 	// reading since we can request a read that starts in the middle
 	// of a sector
 
-	if (cs == NULL || lseek(cs->binfh, sec, SEEK_SET) < 0) {
-		return -1;
-	}
 	while (len) {
 
 		// bytes available in next raw sector or len (bytes)
@@ -622,9 +621,10 @@ size_t read_bincue(void *fh, void *b, loff_t offset, size_t len)
 
 		// read the next raw sector
 
-		if (read(cs->binfh, secbuf, cs->raw_sector_size) != cs->raw_sector_size) {
+		if (pread(cs->binfh, secbuf, cs->raw_sector_size, sec) != cs->raw_sector_size) {
 			return bytes_read;
 		}
+		sec += cs->raw_sector_size;
 
 		// copy cooked sector bytes (skip header if needed, typically 16 bytes)
 		// we want out of those available
@@ -1055,10 +1055,7 @@ static uint8 *fill_buffer(int stream_len, CDPlayer* player)
 			}
 			current_read_bytes_limit = full_read_bytes_limit;
 
-			if (lseek(player->audiofh,
-					  player->fileoffset + player->audioposition - player->silence,
-						  SEEK_SET) < 0)
-				return NULL;
+			const off_t audio_offset = player->fileoffset + player->audioposition - player->silence;
 
 			if (available < 0) {
 				player->audioposition += available; // correct end !;
@@ -1066,7 +1063,7 @@ static uint8 *fill_buffer(int stream_len, CDPlayer* player)
 			}
 
 			ssize_t ret = 0;
-			if ((ret = read(player->audiofh, &buf[offset], available)) >= 0) {
+			if ((ret = pread(player->audiofh, &buf[offset], available, audio_offset)) >= 0) {
 				player->audioposition += ret;
 				offset += ret;
 				available -= ret;

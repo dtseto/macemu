@@ -660,12 +660,13 @@ void *Sys_open(const char *name, bool read_only, bool is_cdrom)
 		fh->is_cdrom = is_cdrom;
 		if (fh->is_file) {
 			fh->is_media_present = true;
-			// Detect disk image file layout
-			loff_t size = 0;
-			size = lseek(fd, 0, SEEK_END);
+			// Detect disk image file layout without changing the shared file position.
+			struct stat st;
+			loff_t size = fstat(fd, &st) == 0 ? st.st_size : 0;
 			uint8 data[256];
-			lseek(fd, 0, SEEK_SET);
-			read(fd, data, 256);
+			ssize_t data_size = pread(fd, data, sizeof(data), 0);
+			if (data_size < 0)
+				data_size = 0;
 			FileDiskLayout(size, data, fh->start_byte, fh->file_size);
 		} else {
 			struct stat st;

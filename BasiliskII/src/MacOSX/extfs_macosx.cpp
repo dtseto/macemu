@@ -512,8 +512,9 @@ uint32 get_rfork_size(const char *path)
 	if (fd < 0)
 		return 0;
 
-	// Get size
-	off_t size = lseek(fd, 0, SEEK_END);
+	// Get size without changing the descriptor's file position.
+	struct stat st;
+	const off_t size = fstat(fd, &st) == 0 ? st.st_size : -1;
 	
 	// Close file and return size
 	close(fd);
