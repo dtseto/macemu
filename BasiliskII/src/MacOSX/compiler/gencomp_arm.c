@@ -5167,8 +5167,8 @@ int main(void)
 	}
 
 	generate_includes(stdout);
-	generate_includes(stblfile);
 	fprintf(stblfile, "#if USE_JIT\n\n");
+	generate_includes(stblfile);
 
 #ifdef USE_XCODE
 	printf("#include \"compemu.h\"\n");

@@ -76108,3 +76108,4 @@ void REGPARAM2 op_f620_0_comp_nf(uae_u32 opcode) /* MOVE16 */
 }}	 if (m68k_pc_offset>SYNC_PC_OFFSET) sync_m68k_pc();
 }
 #endif
+
