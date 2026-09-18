@@ -597,8 +597,6 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"USE_XCODE=1",
-					"USE_JIT=1",
-					"JIT=1",
 					"CPU_aarch64=1",
 					"CPU_AARCH64=1",
 					"AARCH64_ASSEMBLY=1",
@@ -639,8 +637,6 @@
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"USE_XCODE=1",
-					"USE_JIT=1",
-					"JIT=1",
 					"CPU_aarch64=1",
 					"CPU_AARCH64=1",
 					"AARCH64_ASSEMBLY=1",
