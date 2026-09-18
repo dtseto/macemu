@@ -73,8 +73,14 @@ struct BenchmarkHarnessTests {
             contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2026/gencpu.c"),
             encoding: .utf8
         )
+        let activeGenerator = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/uae_cpu_2021/gencpu.c"),
+            encoding: .utf8
+        )
         #expect(source.contains("--dispatch=goto"))
+        #expect(activeGenerator.contains("--dispatch=goto"))
         #expect(source.contains("cpuemu_threaded.cpp"))
+        #expect(activeGenerator.contains("cpuemu_threaded.cpp"))
         #expect(source.contains("defined(__GNUC__) || defined(__clang__)"))
         #expect(source.contains("cpufunctbl[opcode](opcode)"))
         #expect(source.contains("goto *targets[opcode]"))

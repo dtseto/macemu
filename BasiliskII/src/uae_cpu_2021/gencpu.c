@@ -58,6 +58,8 @@
 static FILE *headerfile;
 static FILE *stblfile;
 static FILE *functblfile;
+static FILE *threadedfile;
+static int emit_threaded_dispatch;
 
 static int using_prefetch;
 static int using_exception_3;
@@ -2836,6 +2838,34 @@ static void generate_functbl (void)
 	fprintf(functblfile, "};\n");
 }
 
+/* Optional complete opcode dispatch artifact. The established handler
+ * functions remain authoritative; unsupported compilers use their table. */
+static void generate_threaded_dispatch (void)
+{
+	unsigned int opcode;
+
+	if (!emit_threaded_dispatch || threadedfile == NULL)
+		return;
+	fprintf(threadedfile, "#include \"sysdeps.h\"\n");
+	fprintf(threadedfile, "#include \"newcpu.h\"\n\n");
+	fprintf(threadedfile, "extern cpuop_func *cpufunctbl[65536];\n\n");
+	fprintf(threadedfile, "void cpuemu_threaded_dispatch(uae_u32 opcode)\n{\n");
+	fprintf(threadedfile, "#if defined(__GNUC__) || defined(__clang__)\n");
+	fprintf(threadedfile, "    static const void *const targets[65536] = {\n");
+	for (opcode = 0; opcode < 65536; opcode++)
+		fprintf(threadedfile, "        &&opcode_%04x%s\n", opcode,
+		        opcode == 65535 ? "" : ",");
+	fprintf(threadedfile, "    };\n");
+	fprintf(threadedfile, "    if (opcode >= 65536) { cpufunctbl[0xffff](opcode); return; }\n");
+	fprintf(threadedfile, "    goto *targets[opcode];\n");
+	for (opcode = 0; opcode < 65536; opcode++) {
+		fprintf(threadedfile, "opcode_%04x:\n", opcode);
+		fprintf(threadedfile, "    cpufunctbl[%u](opcode);\n", opcode);
+		fprintf(threadedfile, "    return;\n");
+	}
+	fprintf(threadedfile, "#else\n    cpufunctbl[opcode](opcode);\n#endif\n}\n");
+}
+
 #if (defined(OS_cygwin) || defined(OS_mingw)) && defined(EXTENDED_SIGSEGV)
 void cygwin_mingw_abort()
 {
@@ -2844,8 +2874,18 @@ void cygwin_mingw_abort()
 }
 #endif
 
-int main(void)
+int main(int argc, char **argv)
 {
+    int i;
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--dispatch=goto") == 0)
+            emit_threaded_dispatch = 1;
+        else {
+            fprintf(stderr, "usage: %s [--dispatch=goto]\n", argv[0]);
+            return 2;
+        }
+    }
+
     init_table68k ();
 
     opcode_map = (int *) malloc (sizeof (int) * nr_cpuop_funcs);
@@ -2864,6 +2904,9 @@ int main(void)
     	abort(); 
     if ((functblfile = fopen ("cpufunctbl.cpp", "wb")) == NULL)
     	abort(); 
+    if (emit_threaded_dispatch &&
+        (threadedfile = fopen ("cpuemu_threaded.cpp", "wb")) == NULL)
+        abort();
     if (freopen ("cpuemu.cpp", "wb", stdout) == NULL)
     	abort();
 
@@ -2877,9 +2920,15 @@ int main(void)
     generate_includes (functblfile);
     generate_func ();
     generate_functbl ();
+    if (emit_threaded_dispatch) {
+        generate_includes (threadedfile);
+        generate_threaded_dispatch ();
+    }
     free (table68k);
     fclose(headerfile);
     fclose(stblfile);
     fclose(functblfile);
+    if (threadedfile != NULL)
+        fclose(threadedfile);
     return 0;
 }
