@@ -425,6 +425,7 @@ AC_CHECK_FUNCS(pthread_cancel pthread_testcancel)
 AC_CHECK_FUNCS(pthread_mutexattr_setprotocol)
 AC_CHECK_FUNCS(pthread_mutexattr_settype)
 AC_CHECK_FUNCS(pthread_mutexattr_setpshared)
+AC_CHECK_FUNCS(pthread_condattr_setclock)
 
 dnl If POSIX.4 semaphores are not available, we emulate them with pthread mutexes.
 SEMSRC=

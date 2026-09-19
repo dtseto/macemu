@@ -26,7 +26,7 @@ Still missing or incomplete:
 - `configure.ac` now adds conservative ARM baseline `-O3`/`-march` settings. CPU-specific `-mtune` and macOS-specific tuning remain intentionally unset; the macOS Xcode target has AArch64 defines but no LTO configuration.
 - SDL2 now uses a shared non-blocking SPSC audio ring buffer; SDL3 continues to use its native SDL_AudioStream worker model. The default SDL2 device block remains preference-controlled rather than forced to 2048 frames.
 - No VNC server/async VNC conversion implementation exists in this repository path.
-- Disk read-ahead/LRU caching, network polling/batching, and several timer/display architecture changes remain undone.
+- Network polling/batching and several timer/display architecture changes remain undone. A bounded regular-file disk read cache and the POSIX timer condition-variable conversion are now present in the working tree; they still need target runtime measurements before being treated as performance wins.
 
 ## Status legend
 
@@ -99,7 +99,7 @@ Still missing or incomplete:
 | ID | Status | Finding |
 |---|---|---|
 | D.1 | **Present** | `BasiliskII/src/Unix/sys_unix.cpp:808,835` uses `pread/pwrite` for regular files, with a documented fallback for special/shared-offset files. |
-| D.2 | **Missing** | No application-level disk read-ahead/LRU cache was found in the disk path. |
+| D.2 | **Present, verify** | `BasiliskII/src/Unix/sys_unix.cpp:114-240,938-968` now has a bounded 64 KiB, 16-entry read-through cache for regular disk-image files. `B2_DISK_CACHE=0` disables it; `B2_DISK_CACHE_METRICS=1` reports hit/miss/eviction counters at exit. Writes and handle close invalidate cached blocks. |
 | D.3 | **Present** | ExtFS directory enumeration is cached in `extfs.cpp:403-429`; indexed lookups use the cache. |
 | D.4 | **Present** | `stat_cached` is used across ExtFS metadata operations, with invalidation on mutations. |
 
@@ -116,7 +116,7 @@ Still missing or incomplete:
 | ID | Status | Finding |
 |---|---|---|
 | T.1 | **Present** | Monotonic clock selection exists in `timer_unix.cpp` and precise timing in `timer.cpp`. |
-| T.2 | **Partial** | `timer_unix.cpp:301-346` has a condition-variable timed-wait implementation, but the POSIX implementation in `timer.cpp:161-253` still contains signal-based suspend/resume. macOS Mach timing follows a separate path. |
+| T.2 | **Present for POSIX, Mach unchanged** | `timer.cpp:161-205,537-569` now uses a condition variable and absolute timed waits instead of signal suspend/resume when `PRECISE_TIMING_POSIX` is selected. `configure.ac` checks `pthread_condattr_setclock` so the condition variable can use the same monotonic clock where supported. The macOS Mach path remains unchanged. |
 | T.3 | **Partial/present for timing ownership** | The 60 Hz and precise timer ownership is coordinated in the JIT support path, but SDL3 still has a redraw thread plus VBL-triggered presentation (`video_sdl3.cpp:1496-1503,1892,1921,2943`). A fully unified display pipeline is not complete. |
 
 ## Work not to duplicate
@@ -139,9 +139,9 @@ Highest-value unfinished items, in order:
 1. Make the threaded interpreter real: generate handlers that share a dispatch loop/state rather than labels that call `cpufunctbl` and return; keep the current differential validation and fallback gates.
 2. Extend the ARM build work only if measurements justify it: add missing configure assembly defines or platform-specific tuning, then verify generated instructions on the target architecture.
 3. Decide whether SDL3 should replace the SDL2 audio path for the target; if SDL2 remains supported, implement the ring buffer there separately.
-4. Add a disk read cache only after measuring the existing ExtFS/stat-cache hit rates; ExtFS directory caching is already done.
+4. Measure the new bounded disk read cache (`B2_DISK_CACHE_METRICS=1`) against boot/app-launch I/O before changing its size or policy; ExtFS directory/stat caching is already done.
 5. Finish SDL3 present optimization: preserve dirty-rect texture updates and avoid full render/present work when there is no new frame.
-6. Replace the remaining POSIX timer signal suspend/resume path with a condition-variable design, then run timing/boot regression tests.
+6. Run timing/boot regression tests for the new POSIX condition-variable timer path on a POSIX target; macOS uses the unchanged Mach path.
 7. Add network wakeup/batching only with packet-latency and idle-wakeup measurements.
 
 ## Validation still required
@@ -152,6 +152,37 @@ This is a source/build audit, not a performance claim. Before marking the remain
 - Interpreter differential tests with generated-goto disabled, enabled, and validation enabled.
 - VOSF active/fallback diagnostics on the intended display backend.
 - ExtFS directory-cache metrics while opening large Finder directories.
+- Disk cache hit/miss/eviction metrics during boot and application launch, with `B2_DISK_CACHE=0` as the control run.
 - Audio underrun/latency measurements for both SDL2 and SDL3 paths.
 - 60 Hz/precise-timer drift and CPU-load measurements.
 - A strict JIT marker soak after every dispatch or timing change.
+
+## Runtime measurement status
+
+The available validation host is Apple Silicon macOS. Its Xcode build selects
+the existing Mach precise-timing backend, so it cannot exercise the new
+`PRECISE_TIMING_POSIX` condition-variable path. No Linux/ARM runtime, Docker
+image, QEMU user emulator, ROM image, or disk-image fixture is available in
+the workspace, so integrated disk-cache hit rates cannot be measured without
+inventing workload results.
+
+Completed on this host:
+
+- Xcode build-for-testing completed successfully.
+- Four repository regression tests passed.
+- The built executable responded to `--help` without a crash.
+- The modified Unix disk source passed standalone Clang syntax checking.
+
+Required follow-up on a POSIX target with a real ROM and disk image:
+
+```sh
+B2_BENCHMARK_METRICS=1 B2_DISK_CACHE_METRICS=1 B2_DISK_CACHE=1 \
+  BasiliskII --config benchmark.conf
+B2_BENCHMARK_METRICS=1 B2_DISK_CACHE_METRICS=1 B2_DISK_CACHE=0 \
+  BasiliskII --config benchmark.conf
+```
+
+Compare boot-to-ready time, timer drift, `disk.cache_hit_rate`, misses, and
+evictions between the enabled and control runs. The POSIX timer result should
+also be checked under repeated `PrimeTime`/`RmvTime` activity rather than by a
+standalone condition-variable microbenchmark.

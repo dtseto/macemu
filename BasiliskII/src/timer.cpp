@@ -26,8 +26,7 @@
 
 #ifdef PRECISE_TIMING_POSIX
 #include <pthread.h>
-#include <semaphore.h>
-#include <signal.h>
+#include <errno.h>
 #endif
 
 #ifdef PRECISE_TIMING_MACH
@@ -75,6 +74,8 @@ static volatile bool timer_thread_cancel = false;
 static tm_time_t wakeup_time_max = { 0x7fffffff, 999999999 };
 static tm_time_t wakeup_time = wakeup_time_max;
 static pthread_mutex_t wakeup_time_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t wakeup_time_cond;
+static bool wakeup_time_cond_initialized = false;
 static void *timer_func(void *arg);
 #endif
 #ifdef PRECISE_TIMING_MACH
@@ -159,100 +160,46 @@ static void dequeue_tm(uint32 tm)
  */
 
 #ifdef PRECISE_TIMING_POSIX
-const int SIGSUSPEND = SIGRTMIN + 6;
-const int SIGRESUME  = SIGRTMIN + 7;
-static struct sigaction sigsuspend_action;
-static struct sigaction sigresume_action;
-
-static int suspend_count = 0;
-static pthread_mutex_t suspend_count_lock = PTHREAD_MUTEX_INITIALIZER;
-static sem_t suspend_ack_sem;
-static sigset_t suspend_handler_mask;
-
-// Signal handler for suspended thread
-static void sigsuspend_handler(int sig)
-{
-	sem_post(&suspend_ack_sem);
-	sigsuspend(&suspend_handler_mask);
-}
-
-// Signal handler for resumed thread
-static void sigresume_handler(int sig)
-{
-	/* simply trigger a signal to stop clock_nanosleep() */
-}
-
 // Initialize timer thread
 static bool timer_thread_init(void)
 {
-	// Install suspend signal handler
-	sigemptyset(&sigsuspend_action.sa_mask);
-	sigaddset(&sigsuspend_action.sa_mask, SIGRESUME);
-	sigsuspend_action.sa_handler = sigsuspend_handler;
-	sigsuspend_action.sa_flags = SA_RESTART;
-#ifdef HAVE_SIGNAL_SA_RESTORER
-	sigsuspend_action.sa_restorer = NULL;
+	pthread_condattr_t cond_attr;
+	if (pthread_condattr_init(&cond_attr) != 0)
+		return false;
+#if defined(CLOCK_MONOTONIC) && defined(HAVE_PTHREAD_CONDATTR_SETCLOCK)
+	if (pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC) != 0) {
+		pthread_condattr_destroy(&cond_attr);
+		return false;
+	}
 #endif
-	if (sigaction(SIGSUSPEND, &sigsuspend_action, NULL) < 0)
+	if (pthread_cond_init(&wakeup_time_cond, &cond_attr) != 0) {
+		pthread_condattr_destroy(&cond_attr);
 		return false;
-
-	// Install resume signal handler
-	sigemptyset(&sigresume_action.sa_mask);
-	sigresume_action.sa_handler = sigresume_handler;
-	sigresume_action.sa_flags = SA_RESTART;
-#ifdef HAVE_SIGNAL_SA_RESTORER
-	sigresume_action.sa_restorer = NULL;
-#endif
-	if (sigaction(SIGRESUME, &sigresume_action, NULL) < 0)
+	}
+	pthread_condattr_destroy(&cond_attr);
+	wakeup_time_cond_initialized = true;
+	timer_thread_cancel = false;
+	if (pthread_create(&timer_thread, NULL, timer_func, NULL) != 0) {
+		wakeup_time_cond_initialized = false;
+		pthread_cond_destroy(&wakeup_time_cond);
 		return false;
-
-	// Initialize semaphore
-	if (sem_init(&suspend_ack_sem, 0, 0) < 0)
-		return false;
-
-	// Initialize suspend_handler_mask, it excludes SIGRESUME
-	if (sigfillset(&suspend_handler_mask) != 0)
-		return false;
-	if (sigdelset(&suspend_handler_mask, SIGRESUME) != 0)
-		return false;
-
-	// Create thread in running state
-	suspend_count = 0;
-	return (pthread_create(&timer_thread, NULL, timer_func, NULL) == 0);
+	}
+	return true;
 }
 
 // Kill timer thread
 static void timer_thread_kill(void)
 {
+	pthread_mutex_lock(&wakeup_time_lock);
 	timer_thread_cancel = true;
-#ifdef HAVE_PTHREAD_CANCEL
-	pthread_cancel(timer_thread);
-#endif
+	if (wakeup_time_cond_initialized)
+		pthread_cond_broadcast(&wakeup_time_cond);
+	pthread_mutex_unlock(&wakeup_time_lock);
 	pthread_join(timer_thread, NULL);
-}
-
-// Suspend timer thread
-static void timer_thread_suspend(void)
-{
-	pthread_mutex_lock(&suspend_count_lock);
-	if (suspend_count == 0) {
-		suspend_count ++;
-		if (pthread_kill(timer_thread, SIGSUSPEND) == 0)
-			sem_wait(&suspend_ack_sem);
+	if (wakeup_time_cond_initialized) {
+		pthread_cond_destroy(&wakeup_time_cond);
+		wakeup_time_cond_initialized = false;
 	}
-	pthread_mutex_unlock(&suspend_count_lock);
-}
-
-// Resume timer thread
-static void timer_thread_resume(void)
-{
-	pthread_mutex_lock(&suspend_count_lock);
-	assert(suspend_count > 0);
-	if (suspend_count == 1) {
-		suspend_count = 0;
-		pthread_kill(timer_thread, SIGRESUME);
-	}
-	pthread_mutex_unlock(&suspend_count_lock);
 }
 #endif
 
@@ -393,7 +340,6 @@ int16 RmvTime(uint32 tm)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_lock(&wakeup_time_lock);
-	timer_thread_suspend();
 #endif
 	if (ReadMacInt16(tm + qType) & 0x8000) {
 
@@ -432,8 +378,8 @@ int16 RmvTime(uint32 tm)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_unlock(&wakeup_time_lock);
-	timer_thread_resume();
-	assert(suspend_count == 0);
+	if (wakeup_time_cond_initialized)
+		pthread_cond_signal(&wakeup_time_cond);
 #endif
 
 	// Free descriptor
@@ -510,7 +456,6 @@ int16 PrimeTime(uint32 tm, int32 time)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_lock(&wakeup_time_lock);
-	timer_thread_suspend();
 #endif
 	WriteMacInt16(tm + qType, ReadMacInt16(tm + qType) | 0x8000);
 	enqueue_tm(tm);
@@ -536,8 +481,8 @@ int16 PrimeTime(uint32 tm, int32 time)
 #endif
 #ifdef PRECISE_TIMING_POSIX
 	pthread_mutex_unlock(&wakeup_time_lock);
-	timer_thread_resume();
-	assert(suspend_count == 0);
+	if (wakeup_time_cond_initialized)
+		pthread_cond_signal(&wakeup_time_cond);
 #endif
 #endif
 	return 0;
@@ -597,26 +542,31 @@ static void *timer_func(void *arg)
 #ifdef PRECISE_TIMING_POSIX
 static void *timer_func(void *arg)
 {
+	pthread_mutex_lock(&wakeup_time_lock);
 	while (!timer_thread_cancel) {
-		// Wait until time specified by wakeup_time
-		#if defined(CLOCK_MONOTONIC)
-			clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &wakeup_time, NULL);
-#else
-			clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &wakeup_time, NULL);
-#endif
+		if (timer_cmp_time(wakeup_time, wakeup_time_max) >= 0) {
+			pthread_cond_wait(&wakeup_time_cond, &wakeup_time_lock);
+			continue;
+		}
+
+		const int wait_result = pthread_cond_timedwait(&wakeup_time_cond,
+			&wakeup_time_lock, &wakeup_time);
+		if (timer_thread_cancel)
+			break;
+		if (wait_result != ETIMEDOUT)
+			continue;
 
 		tm_time_t system_time;
 		timer_current_time(system_time);
-		if (timer_cmp_time(wakeup_time, system_time) < 0) {
-
-			// Timer expired, trigger interrupt
-			pthread_mutex_lock(&wakeup_time_lock);
+		if (timer_cmp_time(wakeup_time, system_time) <= 0) {
 			wakeup_time = wakeup_time_max;
 			pthread_mutex_unlock(&wakeup_time_lock);
 			SetInterruptFlag(INTFLAG_TIMER);
 			TriggerInterrupt();
+			pthread_mutex_lock(&wakeup_time_lock);
 		}
 	}
+	pthread_mutex_unlock(&wakeup_time_lock);
 	return NULL;
 }
 #endif
@@ -667,7 +617,6 @@ void TimerInterrupt(void)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_lock(&wakeup_time_lock);
-	timer_thread_suspend();
 #endif
 	wakeup_time = wakeup_time_max;
 	for (TMDesc *d = tmDescList; d; d = d->next)
@@ -689,8 +638,8 @@ void TimerInterrupt(void)
 #endif
 #if PRECISE_TIMING_POSIX
 	pthread_mutex_unlock(&wakeup_time_lock);
-	timer_thread_resume();
-	assert(suspend_count == 0);
+	if (wakeup_time_cond_initialized)
+		pthread_cond_signal(&wakeup_time_cond);
 #endif
 #endif
 }

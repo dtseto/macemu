@@ -23,6 +23,9 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <algorithm>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef HAVE_AVAILABILITYMACROS_H
 #include <AvailabilityMacros.h>
@@ -107,6 +110,135 @@ struct mac_file_handle {
 	void *bincue_fd;
 #endif
 };
+
+/* Small read-through cache for regular disk-image files.  DiskPrime() issues
+ * 512-byte aligned requests, so 4 KiB blocks cover common repeated metadata
+ * reads without adding a large memory footprint.  Writes and handle close
+ * invalidate the complete handle rather than risking stale guest data. */
+enum {
+	DISK_CACHE_BLOCK_SIZE = 4096,
+	DISK_CACHE_BLOCK_COUNT = 16,
+	DISK_CACHE_MAX_REQUEST = DISK_CACHE_BLOCK_SIZE * DISK_CACHE_BLOCK_COUNT
+};
+
+struct disk_cache_entry {
+	mac_file_handle *owner;
+	off_t block_offset;
+	size_t valid_bytes;
+	uint64 age;
+	bool valid;
+	uint8 data[DISK_CACHE_BLOCK_SIZE];
+};
+
+static disk_cache_entry disk_cache[DISK_CACHE_BLOCK_COUNT] = {};
+static uint64 disk_cache_age = 0;
+static uint64 disk_cache_hits = 0;
+static uint64 disk_cache_misses = 0;
+static uint64 disk_cache_evictions = 0;
+static bool disk_cache_initialized = false;
+static bool disk_cache_enabled = true;
+static bool disk_cache_metrics_enabled = false;
+
+static void disk_cache_report_metrics(void)
+{
+	if (!disk_cache_metrics_enabled)
+		return;
+	const uint64 total = disk_cache_hits + disk_cache_misses;
+	const double hit_rate = total == 0 ? 0.0 : (double)disk_cache_hits / (double)total;
+	printf("B2_METRIC disk.cache_hits=%llu\n", (unsigned long long)disk_cache_hits);
+	printf("B2_METRIC disk.cache_misses=%llu\n", (unsigned long long)disk_cache_misses);
+	printf("B2_METRIC disk.cache_evictions=%llu\n", (unsigned long long)disk_cache_evictions);
+	printf("B2_METRIC disk.cache_hit_rate=%.6f\n", hit_rate);
+}
+
+static void disk_cache_initialize(void)
+{
+	if (disk_cache_initialized)
+		return;
+	disk_cache_initialized = true;
+	const char *disabled = getenv("B2_DISK_CACHE");
+	disk_cache_enabled = disabled == NULL || strcmp(disabled, "0") != 0;
+	const char *metrics = getenv("B2_DISK_CACHE_METRICS");
+	disk_cache_metrics_enabled = metrics != NULL && metrics[0] != 0 && strcmp(metrics, "0") != 0;
+	if (disk_cache_metrics_enabled)
+		atexit(disk_cache_report_metrics);
+	printf("B2_OPT path=disk_read_cache %s%s\n",
+		disk_cache_enabled ? "active" : "fallback",
+		disk_cache_enabled ? "" : " reason=disabled");
+}
+
+static void disk_cache_invalidate_handle(mac_file_handle *owner)
+{
+	for (int i = 0; i < DISK_CACHE_BLOCK_COUNT; i++) {
+		if (disk_cache[i].valid && disk_cache[i].owner == owner)
+			disk_cache[i].valid = false;
+	}
+}
+
+static int disk_cache_find(mac_file_handle *owner, off_t block_offset)
+{
+	for (int i = 0; i < DISK_CACHE_BLOCK_COUNT; i++)
+		if (disk_cache[i].valid && disk_cache[i].owner == owner &&
+			disk_cache[i].block_offset == block_offset)
+			return i;
+	return -1;
+}
+
+static size_t disk_cache_read_regular(mac_file_handle *fh, void *buffer,
+	loff_t offset, size_t length)
+{
+	disk_cache_initialize();
+	if (!disk_cache_enabled || length == 0 || length > DISK_CACHE_MAX_REQUEST || offset < 0) {
+		const off_t file_offset = offset + fh->start_byte;
+		const ssize_t result = pread(fh->fd, buffer, length, file_offset);
+		return result > 0 ? (size_t)result : 0;
+	}
+
+	uint8 *destination = (uint8 *)buffer;
+	loff_t file_offset = offset + fh->start_byte;
+	size_t remaining = length;
+	size_t copied = 0;
+	while (remaining != 0) {
+		const off_t block_offset = file_offset & ~(off_t)(DISK_CACHE_BLOCK_SIZE - 1);
+		const size_t block_inner_offset = (size_t)(file_offset - block_offset);
+		const size_t requested = std::min(remaining, (size_t)DISK_CACHE_BLOCK_SIZE - block_inner_offset);
+		int index = disk_cache_find(fh, block_offset);
+		if (index >= 0) {
+			disk_cache_hits++;
+			disk_cache[index].age = ++disk_cache_age;
+		} else {
+			disk_cache_misses++;
+			index = 0;
+			for (int i = 1; i < DISK_CACHE_BLOCK_COUNT; i++) {
+				if (!disk_cache[i].valid || disk_cache[i].age < disk_cache[index].age)
+					index = i;
+			}
+			if (disk_cache[index].valid)
+				disk_cache_evictions++;
+			const ssize_t loaded = pread(fh->fd, disk_cache[index].data,
+				DISK_CACHE_BLOCK_SIZE, block_offset);
+			if (loaded <= 0)
+				return copied;
+			disk_cache[index].owner = fh;
+			disk_cache[index].block_offset = block_offset;
+			disk_cache[index].valid_bytes = (size_t)loaded;
+			disk_cache[index].age = ++disk_cache_age;
+			disk_cache[index].valid = true;
+		}
+
+		if (block_inner_offset >= disk_cache[index].valid_bytes)
+			return copied;
+		const size_t available = disk_cache[index].valid_bytes - block_inner_offset;
+		const size_t amount = std::min(requested, available);
+		memcpy(destination + copied, disk_cache[index].data + block_inner_offset, amount);
+		copied += amount;
+		remaining -= amount;
+		file_offset += amount;
+		if (amount != requested)
+			return copied;
+	}
+	return copied;
+}
 
 // Open file handles
 struct open_mac_file_handle {
@@ -764,6 +896,7 @@ void Sys_close(void *arg)
 	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return;
+	disk_cache_invalidate_handle(fh);
 
 	sys_remove_mac_file_handle(fh);
 
@@ -805,8 +938,7 @@ size_t Sys_read(void *arg, void *buffer, loff_t offset, size_t length)
 	
 	const off_t file_offset = offset + fh->start_byte;
 	if (fh->is_file) {
-		const ssize_t result = pread(fh->fd, buffer, length, file_offset);
-		return result > 0 ? (size_t)result : 0;
+		return disk_cache_read_regular(fh, buffer, offset, length);
 	}
 
 	// Devices need the shared file position.
@@ -832,6 +964,8 @@ size_t Sys_write(void *arg, void *buffer, loff_t offset, size_t length)
 
 	const off_t file_offset = offset + fh->start_byte;
 	if (fh->is_file) {
+		disk_cache_initialize();
+		disk_cache_invalidate_handle(fh);
 		const ssize_t result = pwrite(fh->fd, buffer, length, file_offset);
 		return result > 0 ? (size_t)result : 0;
 	}
