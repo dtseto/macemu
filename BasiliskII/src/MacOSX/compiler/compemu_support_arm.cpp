@@ -7967,10 +7967,13 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
 #if defined(CPU_AARCH64)
             if (currprefs.cpu_compatible) {
                 optlev = 0;
-            } else {
-                const int max_optlev = jit_max_optlev();
-                const uae_u32 blk_pc = (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff);
-				if (trace_in_rom && !jit_native_rom_enabled()) {
+			} else {
+				const int max_optlev = jit_max_optlev();
+				const uae_u32 blk_pc = (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff);
+				/* Basilisk's guest ROM classification is based on ROMBaseMac;
+				   host-side isinrom() is not sufficient on this natmem layout. */
+				const bool arm64_rom_block = trace_in_rom || blk_pc >= ROMBaseMac;
+				if (arm64_rom_block && !jit_native_rom_enabled()) {
 					/* ARM64 safety policy: keep ROM/rtarea on the interpreter path
 					   until their early-boot control flow is validated. */
 					optlev = 0;

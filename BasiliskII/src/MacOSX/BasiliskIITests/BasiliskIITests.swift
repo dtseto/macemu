@@ -214,7 +214,8 @@ struct BenchmarkHarnessTests {
             encoding: .utf8
         )
         #expect(source.contains("B2_JIT_JIT_ROM"))
-        #expect(source.contains("trace_in_rom && !jit_native_rom_enabled()"))
+        #expect(source.contains("arm64_rom_block && !jit_native_rom_enabled()"))
+        #expect(source.contains("ROMBaseMac"))
         #expect(source.contains("ROM/rtarea on the interpreter path"))
         #expect(source.contains("optlev = 0;"))
     }
