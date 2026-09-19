@@ -4440,6 +4440,17 @@ static inline int isinrom(uintptr addr)
 #endif
 }
 
+#if defined(CPU_AARCH64)
+/* Keep ROM and rtarea blocks interpreted by default while early-boot ARM64
+   control-flow patterns are being validated. Set B2_JIT_JIT_ROM=1 only for
+   diagnostic A/B testing of native ROM codegen. */
+static inline bool jit_native_rom_enabled(void)
+{
+	const char *env = getenv("B2_JIT_JIT_ROM");
+	return env && *env && strcmp(env, "0") != 0;
+}
+#endif
+
 static void flush_all(void)
 {
     int i;
@@ -7959,8 +7970,13 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
             } else {
                 const int max_optlev = jit_max_optlev();
                 const uae_u32 blk_pc = (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff);
-                if (blk_pc >= ROMBaseMac) {
-                    /* ROM: immediate L2 native codegen (immutable code).
+				if (trace_in_rom && !jit_native_rom_enabled()) {
+					/* ARM64 safety policy: keep ROM/rtarea on the interpreter path
+					   until their early-boot control flow is validated. */
+					optlev = 0;
+					bi->count = 9;
+				} else if (trace_in_rom) {
+					/* ROM: immediate L2 native codegen (immutable code).
                        When stable direct-edge profiling is explicitly enabled,
                        let the first native generation execute a bounded number
                        of times before one rebuild.  That rebuild is the only

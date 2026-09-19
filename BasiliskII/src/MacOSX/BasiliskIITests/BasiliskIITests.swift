@@ -207,6 +207,18 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("if (remaining == 0)"))
     }
 
+    @Test("ARM64 JIT keeps ROM and rtarea interpretation as the safe default")
+    func arm64JITKeepsROMOnInterpreterPathByDefault() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu_support_arm.cpp"),
+            encoding: .utf8
+        )
+        #expect(source.contains("B2_JIT_JIT_ROM"))
+        #expect(source.contains("trace_in_rom && !jit_native_rom_enabled()"))
+        #expect(source.contains("ROM/rtarea on the interpreter path"))
+        #expect(source.contains("optlev = 0;"))
+    }
+
     @Test("Audio shutdown releases callback before closing SDL")
     func audioShutdownOrdering() throws {
         let source = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/audio_sdl.cpp"), encoding: .utf8)
