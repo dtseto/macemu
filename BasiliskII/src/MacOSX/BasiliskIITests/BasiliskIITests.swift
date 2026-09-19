@@ -309,6 +309,18 @@ struct BenchmarkHarnessTests {
         typealias GeneratedFunction = @convention(c) () -> UInt32
         let function = unsafeBitCast(code, to: GeneratedFunction.self)
         #expect(function() == 42)
+
+        // Verify the write-protect transition and patch lifecycle, not just
+        // initial execution of a MAP_JIT page.
+        pthread_jit_write_protect_np(0)
+        let patchedInstructions: [UInt32] = [0x52800560, 0xd65f03c0] // mov w0, #43; ret
+        patchedInstructions.withUnsafeBytes { bytes in
+            code.copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
+        }
+        sys_icache_invalidate(code, patchedInstructions.count * MemoryLayout<UInt32>.size)
+        pthread_jit_write_protect_np(1)
+
+        #expect(function() == 43)
     }
 #endif
 
