@@ -843,7 +843,7 @@
 
 #if USE_JIT
 #define DIRECT_ADDRESSING	1
-#define USE_JIT_FPU
+#define USE_JIT_FPU 1
 #if defined(__x86_64__)
 #define X86_64_ASSEMBLY
 #endif

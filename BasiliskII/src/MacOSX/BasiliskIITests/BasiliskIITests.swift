@@ -308,6 +308,17 @@ struct BenchmarkHarnessTests {
         #expect(!source.contains("Address of regs: 0x%016x"))
     }
 
+    @Test("JIT FPU feature flag is valid for numeric preprocessor checks")
+    func jitFPUFeatureFlagIsNumeric() throws {
+        let config = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/config.h"),
+            encoding: .utf8
+        )
+
+        #expect(config.contains("#define USE_JIT_FPU 1"))
+        #expect(!config.contains("#define USE_JIT_FPU\n"))
+    }
+
 #if arch(arm64) && os(macOS)
     @Test("macOS MAP_JIT page executes generated ARM64 instructions")
     func mapJITExecutesGeneratedARM64() throws {
