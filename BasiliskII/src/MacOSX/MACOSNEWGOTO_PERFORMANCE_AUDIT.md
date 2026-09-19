@@ -169,8 +169,10 @@ implementation is in `BasiliskII/src/uae_cpu_2026/newcpu.cpp`:
 - The inline island contains only NOP, MOVEQ, and EXT.W/EXT.L/EXT.B.
 - The fallback remains authoritative: unsupported opcodes go directly to
   `cpufunctbl[opcode](opcode)`.
-- `B2_INTERP_THREADED_METRICS=1` reports aggregate dispatches and per-inline
-  opcode counters at shutdown.
+- `B2_INTERP_THREADED_METRICS=1` reports aggregate dispatches, per-inline
+  opcode counters, coarse fallback-family totals, and the top 100 exact
+  fallback opcodes at shutdown. Family totals are profiling buckets, not a
+  replacement for semantic opcode decoding.
 - `B2_INTERP_THREADED_VALIDATE=1` enables optional differential checks; it is
   disabled by default. `B2_INTERP_THREADED_EXT_SELFTEST=1` runs the isolated
   EXT.W/EXT.L/EXT.B state comparison.
@@ -221,6 +223,16 @@ unsupported opcode before adding another family. A candidate should remain a
 register-only operation with no memory, privilege, supervisor, interrupt,
 JIT-tracing, or unusual-PC behavior. Do not add memory MOVE forms, addressing
 modes, TST, or broader register operations until each is separately validated.
+
+The fallback profile is recorded separately in
+`MACOSNEWGOTO_THREADED_FALLBACK_PROFILE.md`. Its top entries are dominated by
+memory operands, branches, stack-frame operations, RTS, MOVEM, and DBcc, so
+none is a safe immediate addition. The safe-candidate TODO is:
+
+- `SWAP Dn`
+- `TST Dn` only
+- `CLR Dn` only
+- simple register-to-register arithmetic after flag validation
 
 The available validation host is Apple Silicon macOS. Its Xcode build selects
 the existing Mach precise-timing backend, so it cannot exercise the new
