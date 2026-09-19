@@ -7013,9 +7013,10 @@ STATIC_INLINE void create_popalls(void)
     }
 #endif
 #ifdef JIT_DEBUG
-    write_log("Address of regs: 0x%016x, regs.pc_p: 0x%016x\n", &regs, &regs.pc_p);
-    write_log("Address of natmem_offset: 0x%016x, natmem_offset = 0x%016x\n", &natmem_offset, natmem_offset);
-    write_log("Address of cache_tags: 0x%016x\n", cache_tags);
+    write_log("Address of regs: %p, regs.pc_p: %p\n", (void *)&regs, (void *)&regs.pc_p);
+    write_log("Address of natmem_offset: %p, natmem_offset = 0x%08x\n",
+        (void *)&natmem_offset, (unsigned)natmem_offset);
+    write_log("Address of cache_tags: %p\n", (void *)cache_tags);
 #endif
     compemu_raw_init_r_regstruct((uintptr)&regs);
     compemu_raw_jmp_pc_tag();

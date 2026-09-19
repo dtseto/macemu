@@ -296,6 +296,18 @@ struct BenchmarkHarnessTests {
         #expect(launcher.contains("return run_jit_selftest();"))
     }
 
+    @Test("ARM64 JIT diagnostics print host pointers without truncation")
+    func arm64JITDiagnosticsPreserveHostPointerFormatting() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu_support_arm.cpp"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("Address of regs: %p, regs.pc_p: %p"))
+        #expect(source.contains("Address of cache_tags: %p"))
+        #expect(!source.contains("Address of regs: 0x%016x"))
+    }
+
 #if arch(arm64) && os(macOS)
     @Test("macOS MAP_JIT page executes generated ARM64 instructions")
     func mapJITExecutesGeneratedARM64() throws {
