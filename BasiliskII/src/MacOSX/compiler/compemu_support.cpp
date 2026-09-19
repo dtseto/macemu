@@ -251,12 +251,14 @@ void m68k_do_compile_execute(void)
 				blockinfo *bi = cache_tags[cl + 1].bi;
 				static int allow_unsafe_native_dispatch = -1;
 				if (allow_unsafe_native_dispatch < 0) {
-					/* Safe C dispatch is the only supported default while native block-return validation is incomplete. */
+					/* Match the x86 boot contract conservatively: keep ARM64 native
+					   dispatch opt-in until block-return and timer handoff behavior is
+					   fully validated on Apple Silicon. */
 						const char *value = getenv("B2_JIT_UNSAFE_NATIVE_DISPATCH");
-						allow_unsafe_native_dispatch = !value || value[0] != '0';
+						allow_unsafe_native_dispatch = value && value[0] != '\0' && value[0] != '0';
 						if (jit_diag_enabled())
 							fprintf(stderr,
-								"JIT_DIAG native_dispatch=%s (B2_JIT_UNSAFE_NATIVE_DISPATCH=0 selects slow execute_normal fallback)\n",
+								"JIT_DIAG native_dispatch=%s (B2_JIT_UNSAFE_NATIVE_DISPATCH=1 enables experimental native dispatch)\n",
 								allow_unsafe_native_dispatch ? "enabled" : "disabled");
 				}
 				if (jit_diag_enabled()) {

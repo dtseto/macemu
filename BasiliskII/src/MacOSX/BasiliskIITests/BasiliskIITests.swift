@@ -174,7 +174,7 @@ struct BenchmarkHarnessTests {
         )
         #expect(source.contains("B2_JIT_BOOTSTRAP_WATCHDOG"))
         #expect(source.contains("first execute_normal() returned pc=%08x pc_p=%p"))
-        #expect(source.contains("B2_JIT_UNSAFE_NATIVE_DISPATCH=0 selects slow execute_normal fallback"))
+        #expect(source.contains("B2_JIT_UNSAFE_NATIVE_DISPATCH=1 enables experimental native dispatch"))
         #expect(source.contains("jit_watchdog_arm(true)"))
         #expect(source.contains("jit_watchdog_arm(false)"))
     }
