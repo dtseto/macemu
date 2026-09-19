@@ -2767,7 +2767,7 @@ void m68k_do_execute (void)
 	const bool generated_goto = interpreter_generated_goto_enabled();
 	if (threaded_prototype && !threaded_targets_initialized) {
 		for (unsigned i = 0; i < 65536; i++)
-			threaded_targets[i] = &&interpreter_threaded_fallback;
+			threaded_targets[i] = &&interpreter_fallback;
 		threaded_targets[0x4e71] = &&interpreter_threaded_nop;
 		for (unsigned i = 0x7000; i <= 0x70ff; i++)
 			threaded_targets[i] = &&interpreter_threaded_moveq;
@@ -2786,9 +2786,9 @@ void m68k_do_execute (void)
 		if (table_selftest && table_selftest[0] && strcmp(table_selftest, "0") != 0) {
 			unsigned mapped_count = 0;
 			for (unsigned i = 0; i < 65536; i++)
-				if (threaded_targets[i] != &&interpreter_threaded_fallback)
+				if (threaded_targets[i] != &&interpreter_fallback)
 					mapped_count++;
-			const bool table_ok = threaded_targets[0xffff] == &&interpreter_threaded_fallback &&
+			const bool table_ok = threaded_targets[0xffff] == &&interpreter_fallback &&
 				threaded_targets[0x4e71] == &&interpreter_threaded_nop &&
 				threaded_targets[0x7000] == &&interpreter_threaded_moveq &&
 				threaded_targets[0x70ff] == &&interpreter_threaded_moveq;
@@ -2941,10 +2941,14 @@ void m68k_do_execute (void)
 		goto *threaded_targets[opcode];
 	}
 #endif
-	(*handler)(opcode);
-	goto interpreter_dispatch_complete;
 #if defined(__GNUC__) || defined(__clang__)
-interpreter_threaded_fallback:
+	/*
+	 * The inline island is direct-threaded through labels, removing the
+	 * per-opcode C++ call/return at this boundary. Fallback instructions still
+	 * call their canonical cpufunctbl handler, then rejoin this loop.
+	 */
+	goto interpreter_fallback;
+interpreter_fallback:
 	if (threaded_metrics) {
 		interpreter_threaded_fallbacks++;
 		interpreter_threaded_fallback_counts[opcode]++;
@@ -2996,7 +3000,7 @@ interpreter_threaded_ext: {
 }
 interpreter_threaded_register_move: {
 	if (!interpreter_threaded_execute_register_move(opcode))
-		goto interpreter_threaded_fallback;
+		goto interpreter_fallback;
 	m68k_incpc(2);
 	if (threaded_metrics)
 		interpreter_threaded_inline_counts[opcode]++;
@@ -3004,6 +3008,10 @@ interpreter_threaded_register_move: {
 		interpreter_threaded_validate_inline(opcode, handler, threaded_before);
 	goto interpreter_dispatch_complete;
 }
+#endif
+#if !defined(__GNUC__) && !defined(__clang__)
+	(*handler)(opcode);
+	goto interpreter_dispatch_complete;
 #endif
 interpreter_dispatch_complete:
 	if (trace_a995_pending && trace_a995_step < 64) {
