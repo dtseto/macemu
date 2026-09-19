@@ -2360,6 +2360,46 @@ static bool interpreter_threaded_is_ext(uae_u32 opcode)
 		(opcode & 0xffc0) == 0x49c0;
 }
 
+/* Only MOVE between data registers is safe for this prototype. The mode
+   fields must both be zero; all memory and side-effecting modes fall back. */
+static bool interpreter_threaded_is_register_move(uae_u32 opcode)
+{
+	const uae_u32 size_base = opcode & 0xf000;
+	return (size_base == 0x1000 || size_base == 0x2000 || size_base == 0x3000) &&
+		(opcode & 0x01f8) == 0;
+}
+
+static bool interpreter_threaded_execute_register_move(uae_u32 opcode)
+{
+	if (!interpreter_threaded_is_register_move(opcode))
+		return false;
+	const unsigned source_register = opcode & 7;
+	const unsigned destination_register = (opcode >> 9) & 7;
+	const uae_u32 source = m68k_dreg(regs, source_register);
+	uae_u32 value;
+	if ((opcode & 0xf000) == 0x1000) {
+		value = source & 0xff;
+		m68k_dreg(regs, destination_register) =
+			(m68k_dreg(regs, destination_register) & 0xffffff00) | value;
+	} else if ((opcode & 0xf000) == 0x2000) {
+		value = source;
+		m68k_dreg(regs, destination_register) = value;
+	} else {
+		value = source & 0xffff;
+		m68k_dreg(regs, destination_register) =
+			(m68k_dreg(regs, destination_register) & 0xffff0000) | value;
+	}
+	CLEAR_CZNV();
+	SET_ZFLG(value == 0);
+	if ((opcode & 0xf000) == 0x1000)
+		SET_NFLG((value & 0x80) != 0);
+	else if ((opcode & 0xf000) == 0x2000)
+		SET_NFLG((value & 0x80000000) != 0);
+	else
+		SET_NFLG((value & 0x8000) != 0);
+	return true;
+}
+
 static void interpreter_threaded_execute_ext(uae_u32 opcode)
 {
 	const unsigned source_register = opcode & 7;
@@ -2483,9 +2523,8 @@ static unsigned interpreter_threaded_snapshot_difference(
 	return difference;
 }
 
-/* NOP and MOVEQ have no memory effects, so a complete CPU/register snapshot is
- * sufficient to run the normal handler as a diagnostic and restore the inline
- * result. This hook is deliberately restricted to those two proven handlers. */
+/* NOP, MOVEQ, EXT, and register-only MOVE have no memory effects, so a complete
+ * CPU/register snapshot is sufficient for optional differential validation. */
 static void interpreter_threaded_validate_inline(uae_u32 opcode,
 	cpuop_func *normal_handler,
 	const interpreter_threaded_state_snapshot &before)
@@ -2558,6 +2597,51 @@ static void interpreter_threaded_ext_selftest()
 	regflags = saved_flags;
 	fprintf(stderr, "B2_INTERP EXT selftest completed\\n");
 }
+
+static void interpreter_threaded_register_move_selftest()
+{
+	static bool initialized = false;
+	if (initialized)
+		return;
+	initialized = true;
+	const char *enabled = getenv("B2_INTERP_THREADED_MOVE_SELFTEST");
+	if (!enabled || !enabled[0] || strcmp(enabled, "0") == 0)
+		return;
+
+	const struct regstruct saved_regs = regs;
+	const struct flag_struct saved_flags = regflags;
+	const uae_u32 values[] = { 0, 1, 0x7f, 0x80, 0x8000, 0x80000000, 0xffffffff };
+	const uae_u16 opcodes[] = { 0x1001, 0x2001, 0x3001 };
+	for (unsigned op = 0; op < sizeof(opcodes) / sizeof(opcodes[0]); op++) {
+		for (unsigned value_index = 0; value_index < sizeof(values) / sizeof(values[0]); value_index++) {
+			regs = saved_regs;
+			regflags = saved_flags;
+			m68k_dreg(regs, 0) = values[value_index];
+			interpreter_threaded_state_snapshot before;
+			interpreter_threaded_snapshot(before);
+			cpufunctbl[opcodes[op]](opcodes[op]);
+			interpreter_threaded_state_snapshot normal;
+			interpreter_threaded_snapshot(normal);
+
+			regs = before.regs;
+			regflags = before.regflags;
+			if (!interpreter_threaded_execute_register_move(opcodes[op])) {
+				fprintf(stderr, "B2_INTERP MOVE selftest rejected opcode=%04x\\n",
+					(unsigned)opcodes[op]);
+				continue;
+			}
+			m68k_incpc(2);
+			interpreter_threaded_state_snapshot fast;
+			interpreter_threaded_snapshot(fast);
+			if (!interpreter_threaded_snapshot_equal(fast, normal))
+				fprintf(stderr, "B2_INTERP MOVE selftest mismatch opcode=%04x value=%08x\\n",
+					(unsigned)opcodes[op], (unsigned)values[value_index]);
+		}
+	}
+	regs = saved_regs;
+	regflags = saved_flags;
+	fprintf(stderr, "B2_INTERP MOVE selftest completed\\n");
+}
 #endif
 
 static void interpreter_dispatch_breakpoint(uae_u32 pc, uae_u16 opcode)
@@ -2613,9 +2697,14 @@ void m68k_do_execute (void)
 			threaded_targets[i] = &&interpreter_threaded_ext;
 		for (unsigned i = 0x49c0; i <= 0x49c7; i++)
 			threaded_targets[i] = &&interpreter_threaded_ext;
+		for (unsigned i = 0; i < 65536; i++) {
+			if (interpreter_threaded_is_register_move(i))
+				threaded_targets[i] = &&interpreter_threaded_register_move;
+		}
 		threaded_targets_initialized = true;
-		fprintf(stderr, "B2_INTERP threaded prototype enabled (NOP/MOVEQ/EXT island)\\n");
+		fprintf(stderr, "B2_INTERP threaded prototype enabled (NOP/MOVEQ/EXT/register-MOVE island)\\n");
 		interpreter_threaded_ext_selftest();
+		interpreter_threaded_register_move_selftest();
 	}
 #endif
     for (;;) {
@@ -2751,7 +2840,8 @@ void m68k_do_execute (void)
 			interpreter_threaded_dispatches++;
 		validate_threaded_inline = threaded_validation &&
 			(opcode == 0x4e71 || (opcode & 0xff00) == 0x7000 ||
-			 interpreter_threaded_is_ext(opcode));
+			 interpreter_threaded_is_ext(opcode) ||
+			 interpreter_threaded_is_register_move(opcode));
 		if (validate_threaded_inline)
 			interpreter_threaded_snapshot(threaded_before);
 		goto *threaded_targets[opcode];
@@ -2799,6 +2889,16 @@ interpreter_threaded_ext: {
 		}
 	}
 	interpreter_threaded_execute_ext(opcode);
+	m68k_incpc(2);
+	if (threaded_metrics)
+		interpreter_threaded_inline_counts[opcode]++;
+	if (validate_threaded_inline)
+		interpreter_threaded_validate_inline(opcode, handler, threaded_before);
+	goto interpreter_dispatch_complete;
+}
+interpreter_threaded_register_move: {
+	if (!interpreter_threaded_execute_register_move(opcode))
+		goto interpreter_threaded_fallback;
 	m68k_incpc(2);
 	if (threaded_metrics)
 		interpreter_threaded_inline_counts[opcode]++;

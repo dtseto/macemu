@@ -41,7 +41,7 @@ Still missing or incomplete:
 | Feature | Status | Evidence in `macosnewgoto` | Notes |
 |---|---|---|---|
 | SDL3 | **Present** | `BasiliskII/src/SDL/video_sdl3.cpp`, `audio_sdl3.cpp`; `BasiliskII/src/MacOSX/BasiliskII.xcodeproj/project.pbxproj:13-16,576-585,1214,1305` | SDL3 framework and both source files are in the Xcode target. |
-| Goto/threaded interpreter | **Partial — safe inline opcode island** | `BasiliskII/src/uae_cpu_2026/gencpu.c:2843-2946`; `BasiliskII/src/uae_cpu_2026/newcpu.cpp:2346-2808`; `BasiliskII/src/MacOSX/Makefile.gencpu_2021:9` | The generated goto backend remains separate and each generated label still calls `cpufunctbl[n](opcode)` and returns. The opt-in hand-written prototype directly handles only NOP (`0x4e71`), MOVEQ (`0x7000-0x70ff`), and EXT.W/EXT.L/EXT.B (`0x4880-0x4887`, `0x48c0-0x48c7`, `0x49c0-0x49c7`); every unsupported opcode immediately falls back through `cpufunctbl[opcode](opcode)`. Runtime activation is opt-in via `B2_INTERP_THREADED_PROTO`; metrics and validation are opt-in via `B2_INTERP_THREADED_METRICS` and `B2_INTERP_THREADED_VALIDATE`. This is not yet a full threaded interpreter or default fast path. |
+| Goto/threaded interpreter | **Partial — safe inline opcode island** | `BasiliskII/src/uae_cpu_2026/gencpu.c:2843-2946`; `BasiliskII/src/uae_cpu_2026/newcpu.cpp:2346-2860`; `BasiliskII/src/MacOSX/Makefile.gencpu_2021:9` | The generated goto backend remains separate and each generated label still calls `cpufunctbl[n](opcode)` and returns. The opt-in hand-written prototype directly handles only NOP (`0x4e71`), MOVEQ (`0x7000-0x70ff`), EXT.W/EXT.L/EXT.B (`0x4880-0x4887`, `0x48c0-0x48c7`, `0x49c0-0x49c7`), and register-only MOVE.B/W/L Dn→Dn (`0x1000/0x2000/0x3000` with both mode fields zero); every unsupported or rejected opcode immediately falls back through `cpufunctbl[opcode](opcode)`. Runtime activation is opt-in via `B2_INTERP_THREADED_PROTO`; metrics and validation are opt-in via `B2_INTERP_THREADED_METRICS` and `B2_INTERP_THREADED_VALIDATE`. This is not yet a full threaded interpreter or default fast path. |
 | ExtFS directory cache/lookup | **Present** | `BasiliskII/src/extfs.cpp:115-203,259-260,403-429,1429,1540,1587` | Directory entries are cached and rebuilt when directory mtime changes. |
 | ExtFS stat cache | **Present** | `BasiliskII/src/extfs.cpp:115-203,1365,1440,1493,1552,1634` | 128-entry TTL/LRU-like cache, failure TTL, invalidation, and optional metrics. |
 | Dual timing | **Present, verify at runtime** | `BasiliskII/src/timer.cpp:268-346,597-605`; `BasiliskII/src/uae_cpu_2026/compiler/compemu_support.cpp:123-180` | Monotonic 60 Hz scheduling and precise Time Manager timing have explicit ownership/coordination logic. This is not the same as merging every video loop into one loop. |
@@ -175,8 +175,10 @@ implementation is in `BasiliskII/src/uae_cpu_2026/newcpu.cpp`:
   disabled by default. `B2_INTERP_THREADED_EXT_SELFTEST=1` runs the isolated
   EXT.W/EXT.L/EXT.B state comparison.
 
-The isolated EXT self-test completed without a mismatch. A normal boot run
-also exercised all three EXT sizes and NOP. The measured shutdown summary was:
+The isolated EXT self-test completed without a mismatch. The isolated
+register-only MOVE self-test also completed without a mismatch. Normal boot
+runs exercised all three EXT sizes, NOP, MOVEQ, and register-only MOVE.B/W/L.
+One MOVE-enabled shutdown summary was:
 
 ```text
 threaded.dispatches=735496142
@@ -189,13 +191,20 @@ opcode_48c0 (EXT.L)=1572158
 opcode_49c3 (EXT.B)=1536
 ```
 
-These numbers describe one diagnostic run only; they do not establish a
+The MOVE-enabled run reported 311,068,058 threaded dispatches,
+298,475,017 fallbacks, 12,593,041 inline dispatches, and a 95.95% fallback
+rate. Its inline MOVE counts were approximately 550,000 MOVE.B, 535,000
+MOVE.W, and 1,000,000 MOVE.L operations. These numbers describe diagnostic
+runs only; they do not establish a
 performance improvement. The high aggregate fallback percentage is expected
 because the inline island is intentionally small. The current counters do not
 identify the most frequent unsupported opcode, so the next candidate should
-be selected only after adding or using fallback-opcode profiling. The safest
-next family is simple register-only MOVE (with no memory or addressing-mode
-side effects), added one encoding family at a time and differentially tested.
+be selected only after adding or using fallback-opcode profiling.
+
+Register-only MOVE is deliberately restricted to Dn→Dn with no memory or
+addressing-mode side effects. `B2_INTERP_THREADED_MOVE_SELFTEST=1` exercises
+MOVE.B/W/L against the normal handlers. The inline label also rejects any
+unexpected opcode and immediately transfers to the normal fallback label.
 
 The logged `ALINE_EXC nr=10` was also reproduced with
 `B2_INTERP_THREADED_PROTO=0`, at the same guest PC, and the emulator continued
@@ -206,6 +215,12 @@ Builds after manual cleaning succeeded for `uae_cpu_arm64` and `BasiliskII`.
 The command-line clean was blocked by permissions on the shared Xcode
 DerivedData directory. Runtime checks reached at least 255 million
 instructions with the prototype enabled and no host crash or hang.
+
+The next safe step is fallback-opcode profiling to identify a genuinely common
+unsupported opcode before adding another family. A candidate should remain a
+register-only operation with no memory, privilege, supervisor, interrupt,
+JIT-tracing, or unusual-PC behavior. Do not add memory MOVE forms, addressing
+modes, TST, or broader register operations until each is separately validated.
 
 The available validation host is Apple Silicon macOS. Its Xcode build selects
 the existing Mach precise-timing backend, so it cannot exercise the new
