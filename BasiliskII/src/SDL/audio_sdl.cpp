@@ -29,6 +29,7 @@
 #include "user_strings.h"
 #include "audio.h"
 #include "audio_defs.h"
+#include "audio_ring_buffer.h"
 
 #define DEBUG 0
 #include "debug.h"
@@ -46,9 +47,10 @@ static int audio_sample_size_index = 0;
 static int audio_channel_count_index = 0;
 
 // Global variables
-static SDL_sem *audio_irq_done_sem = NULL;			// Signal from interrupt to streaming thread: data block read
 static uint8 silence_byte;							// Byte value to use to fill sound buffers with silence
 static uint8 *audio_mix_buf = NULL;
+static uint8 *audio_producer_buf = NULL;
+static AudioRingBuffer audio_ring;
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 static SDL_atomic_t audio_shutting_down;
 #else
@@ -157,6 +159,21 @@ static bool open_sdl_audio(void)
 		SDL_CloseAudio();
 		return false;
 	}
+	audio_producer_buf = (uint8*)malloc(audio_spec.size);
+	if (audio_producer_buf == NULL) {
+		free(audio_mix_buf);
+		audio_mix_buf = NULL;
+		SDL_CloseAudio();
+		return false;
+	}
+	if (!audio_ring.initialize((size_t)audio_spec.size * 4 + 1)) {
+		free(audio_mix_buf);
+		audio_mix_buf = NULL;
+		free(audio_producer_buf);
+		audio_producer_buf = NULL;
+		SDL_CloseAudio();
+		return false;
+	}
 	set_audio_shutting_down(false);
 	SDL_PauseAudio(0);
 	return true;
@@ -192,8 +209,6 @@ void AudioInit(void)
 	if (PrefsFindBool("nosound"))
 		return;
 
-	// Init semaphore
-	audio_irq_done_sem = SDL_CreateSemaphore(0);
 #ifdef BINCUE
 	InitBinCue();
 #endif
@@ -211,12 +226,7 @@ static void close_audio(void)
 	if (!audio_open)
 		return;
 
-	// The callback can be blocked waiting for the emulation thread to service
-	// an audio interrupt. During shutdown that thread cannot provide the ack,
-	// so make the callback cancellable and release any outstanding wait first.
 	set_audio_shutting_down(true);
-	if (audio_irq_done_sem)
-		SDL_SemPost(audio_irq_done_sem);
 
 #if defined(BINCUE)
 	CloseAudio_bincue();
@@ -225,6 +235,9 @@ static void close_audio(void)
 	SDL_CloseAudio();
 	free(audio_mix_buf);
 	audio_mix_buf = NULL;
+	free(audio_producer_buf);
+	audio_producer_buf = NULL;
+	audio_ring.reset();
 	audio_open = false;
 }
 
@@ -235,11 +248,6 @@ void AudioExit(void)
 #ifdef BINCUE
 	ExitBinCue();
 #endif
-	// Delete semaphore
-	if (audio_irq_done_sem) {
-		SDL_DestroySemaphore(audio_irq_done_sem);
-		audio_irq_done_sem = NULL;
-	}
 }
 
 
@@ -272,50 +280,26 @@ static void stream_func(void *arg, uint8 *stream, int stream_len)
 		return;
 	}
 
-	if (AudioStatus.num_sources) {
-		// Trigger audio interrupt to get new buffer
-		D(bug("stream: triggering irq\n"));
-		SetInterruptFlag(INTFLAG_AUDIO);
-		TriggerInterrupt();
-		D(bug("stream: waiting for ack\n"));
-		SDL_SemWait(audio_irq_done_sem);
-		D(bug("stream: ack received\n"));
-		if (is_audio_shutting_down()) {
-			memset(stream, silence_byte, stream_len);
-			return;
+	memset(stream, silence_byte, stream_len);
+	if (AudioStatus.num_sources && !main_mute && !speaker_mute) {
+		/* Request more data without waiting in the real-time callback.  The
+		 * emulation thread fills the ring asynchronously through AudioInterrupt. */
+		if (audio_ring.readable_bytes() < (size_t)stream_len) {
+			SetInterruptFlag(INTFLAG_AUDIO);
+			TriggerInterrupt();
 		}
 
-		// Get size of audio data
-		uint32 apple_stream_info = ReadMacInt32(audio_data + adatStreamInfo);
-		if (apple_stream_info && !main_mute && !speaker_mute) {
-			int work_size = ReadMacInt32(apple_stream_info + scd_sampleCount) * (AudioStatus.sample_size >> 3) * AudioStatus.channels;
-			D(bug("stream: work_size %d\n", work_size));
-			if (work_size > stream_len)
-				work_size = stream_len;
-			if (work_size == 0)
-				goto silence;
-
-			// Send data to audio device
-			bool dbl = AudioStatus.channels == 2 &&
-				ReadMacInt16(apple_stream_info + scd_numChannels) == 1 &&
-				ReadMacInt16(apple_stream_info + scd_sampleSize) == 8;
-			uint8 *src = Mac2HostAddr(ReadMacInt32(apple_stream_info + scd_buffer));
-			if (dbl)
-				for (int i = 0; i < work_size; i += 2)
-					audio_mix_buf[i] = audio_mix_buf[i + 1] = src[i >> 1];
-			else memcpy(audio_mix_buf, src, work_size);
-			memset((uint8 *)stream, silence_byte, stream_len);
-			SDL_MixAudio(stream, audio_mix_buf, work_size, get_audio_volume());
-
-			D(bug("stream: data written\n"));
-
-		} else
-			goto silence;
-
-	} else {
-
-		// Audio not active, play silence
-		silence: memset(stream, silence_byte, stream_len);
+		const int volume = get_audio_volume();
+		if (volume == SDL_MIX_MAXVOLUME) {
+			audio_ring.read(stream, stream_len);
+		} else {
+			const size_t available = audio_ring.readable_bytes();
+			const size_t amount = std::min(available, (size_t)stream_len);
+			if (amount != 0) {
+				audio_ring.read(audio_mix_buf, amount);
+				SDL_MixAudio(stream, audio_mix_buf, (uint32)amount, volume);
+			}
+		}
 	}
 	
 #if defined(BINCUE)
@@ -332,6 +316,8 @@ static void stream_func(void *arg, uint8 *stream, int stream_len)
 void AudioInterrupt(void)
 {
 	D(bug("AudioInterrupt\n"));
+	if (is_audio_shutting_down() || audio_producer_buf == NULL)
+		return;
 
 	// Get data from apple mixer
 	if (AudioStatus.mixer) {
@@ -343,9 +329,26 @@ void AudioInterrupt(void)
 	} else
 		WriteMacInt32(audio_data + adatStreamInfo, 0);
 
-	// Signal stream function. It may already be gone during shutdown.
-	if (audio_irq_done_sem)
-		SDL_SemPost(audio_irq_done_sem);
+	uint32 apple_stream_info = ReadMacInt32(audio_data + adatStreamInfo);
+	if (apple_stream_info && !main_mute && !speaker_mute) {
+		int work_size = ReadMacInt32(apple_stream_info + scd_sampleCount) *
+			(AudioStatus.sample_size >> 3) * AudioStatus.channels;
+		if (work_size > 0) {
+			bool dbl = AudioStatus.channels == 2 &&
+				ReadMacInt16(apple_stream_info + scd_numChannels) == 1 &&
+				ReadMacInt16(apple_stream_info + scd_sampleSize) == 8;
+			uint8 *src = Mac2HostAddr(ReadMacInt32(apple_stream_info + scd_buffer));
+			if (dbl) {
+				if ((size_t)work_size <= (size_t)audio_frames_per_block * AudioStatus.channels * (AudioStatus.sample_size >> 3)) {
+					for (int i = 0; i < work_size; i += 2)
+						audio_producer_buf[i] = audio_producer_buf[i + 1] = src[i >> 1];
+					audio_ring.write(audio_producer_buf, work_size);
+				}
+			} else {
+				audio_ring.write(src, work_size);
+			}
+		}
+	}
 	D(bug("AudioInterrupt done\n"));
 }
 
@@ -409,6 +412,8 @@ uint32 audio_get_speaker_volume(void)
 void audio_set_main_mute(bool mute)
 {
 	main_mute = mute;
+	if (mute)
+		audio_ring.reset();
 }
 
 void audio_set_main_volume(uint32 vol)
@@ -422,6 +427,8 @@ void audio_set_main_volume(uint32 vol)
 void audio_set_speaker_mute(bool mute)
 {
 	speaker_mute = mute;
+	if (mute)
+		audio_ring.reset();
 }
 
 void audio_set_speaker_volume(uint32 vol)
@@ -466,4 +473,3 @@ void PlayStartupSound() {
 }
 #endif
 #endif	// SDL_VERSION_ATLEAST
-

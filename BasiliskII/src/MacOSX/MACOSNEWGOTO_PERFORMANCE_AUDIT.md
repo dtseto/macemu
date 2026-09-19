@@ -24,7 +24,7 @@ Still missing or incomplete:
 - The full interpreter still executes one function-pointer handler per opcode in the normal path.
 - ARM/AArch64 byte swapping is now optimized in `BasiliskII/src/Unix/sysdeps.h`; target-generated code emits `rev`/`rev16`.
 - `configure.ac` now adds conservative ARM baseline `-O3`/`-march` settings. CPU-specific `-mtune` and macOS-specific tuning remain intentionally unset; the macOS Xcode target has AArch64 defines but no LTO configuration.
-- The SDL2 audio implementation still blocks on a semaphore and uses the old mixing buffer. SDL3 uses an SDL audio stream, but it is not the documented lock-free 2048-frame ring-buffer implementation.
+- SDL2 now uses a shared non-blocking SPSC audio ring buffer; SDL3 continues to use its native SDL_AudioStream worker model. The default SDL2 device block remains preference-controlled rather than forced to 2048 frames.
 - No VNC server/async VNC conversion implementation exists in this repository path.
 - Disk read-ahead/LRU caching, network polling/batching, and several timer/display architecture changes remain undone.
 
@@ -80,7 +80,7 @@ Still missing or incomplete:
 |---|---|---|
 | V.1 | **Missing/not applicable to current tree** | No `vnc_server.cpp` or VNC background conversion implementation is present in this repository. Do not duplicate this work unless VNC is reintroduced. |
 | V.2 | **Not found in SDL3 path** | The pasted SDL2 double-buffer `memcmp` guard is not the macOS SDL3 implementation. SDL3 already accumulates dirty rectangles in `video_sdl3.cpp:157-158,1095`; inspect that path before adding another full-frame copy. |
-| V.3 | **Partial** | SDL3 returns early when the dirty rect is empty (`video_sdl3.cpp:974-976`), but when dirty it still renders the full texture and calls `SDL_RenderPresent` (`1082-1084`). |
+| V.3 | **Partial/present** | Both SDL2 and SDL3 return before rendering when the dirty rect is empty (`video_sdl2.cpp:1021-1024`, `video_sdl3.cpp:976`). When dirty, both still render the full texture and call `SDL_RenderPresent`; further source/destination scaling optimization remains. |
 | V.4 | **Present** | NEON dirty comparison is wired into SDL2 dirty paths and the SDL3 source includes `video_neon.h`. |
 | V.5 | **Present, not enabled by default** | VOSF threshold/policy and diagnostics exist; the checked macOS config leaves `ENABLE_VOSF` undefined. |
 | V.6 | **Present** | SDL3 has `video_expand_indexed_rect` and reports the palette expansion path in `video_sdl3.cpp:988-1000`. |
@@ -89,9 +89,9 @@ Still missing or incomplete:
 
 | ID | Status | Finding |
 |---|---|---|
-| A.1 | **Missing for SDL2; different SDL3 design** | `BasiliskII/src/SDL/audio_sdl.cpp:195-196,281,308` still creates/waits on a semaphore and uses `audio_mix_buf`. SDL3 uses `SDL_AudioStream` and a worker thread, but is not the documented lock-free SPSC ring buffer. |
-| A.2 | **Missing** | No 2048-frame ring-buffer default was found in the SDL2/SDL3 implementations. |
-| A.3 | **Missing for SDL2** | The SDL2 path still performs the old intermediate mixing-buffer operations; no direct ring read at full volume was found. |
+| A.1 | **Present for SDL2; different SDL3 design** | `BasiliskII/src/SDL/audio_ring_buffer.h` provides a non-blocking SPSC byte queue; `audio_sdl.cpp` now reads it from the SDL2 callback and writes it from `AudioInterrupt`. SDL3 retains its native `SDL_AudioStream` worker model. |
+| A.2 | **Partial** | SDL2 now buffers four device blocks, but the device block size remains preference-controlled rather than forcing the audit's 2048-frame default. |
+| A.3 | **Present for SDL2** | Full-volume SDL2 callbacks read directly into the output stream; volume/mixing cases use a separate callback scratch buffer. |
 | macOS native audio | **Separate path** | `audio_macosx.cpp` is distinct from SDL audio and should not be conflated with the SDL2 audit. |
 
 ### Disk/filesystem
@@ -129,7 +129,8 @@ Do not start another implementation of these without first checking the existing
 4. VOSF profitability policy and diagnostics — already implemented; only runtime validation/tuning remains.
 5. Monotonic/dual timing ownership — already implemented in timer/JIT support; remaining work is timer cleanup and display-loop unification.
 6. ARM/AArch64 builtin byte swapping and portable ARM baseline tuning — implemented in `BasiliskII/src/Unix/sysdeps.h` and `BasiliskII/src/Unix/configure.ac`; do not redo it without profiling or adding missing configure defines.
-7. AArch64 flag assembly, atomic SPCFLAGS, STOP sleeping, and regular-file `pread/pwrite` — already implemented.
+7. SDL2 non-blocking audio transport — implemented in `BasiliskII/src/SDL/audio_ring_buffer.h` and `audio_sdl.cpp`; do not reintroduce callback waits or share scratch buffers between producer and consumer.
+8. AArch64 flag assembly, atomic SPCFLAGS, STOP sleeping, and regular-file `pread/pwrite` — already implemented.
 
 ## Recommended next tranche
 
