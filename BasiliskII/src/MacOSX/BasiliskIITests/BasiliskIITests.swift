@@ -166,6 +166,19 @@ struct BenchmarkHarnessTests {
         #expect(!header.contains("#define USE_JIT\n"))
     }
 
+    @Test("ARM64 JIT bootstrap and safety fallback diagnostics are opt-in")
+    func arm64JITBootstrapAndFallbackDiagnosticsAreOptIn() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu_support.cpp"),
+            encoding: .utf8
+        )
+        #expect(source.contains("B2_JIT_BOOTSTRAP_WATCHDOG"))
+        #expect(source.contains("first execute_normal() returned pc=%08x pc_p=%p"))
+        #expect(source.contains("B2_JIT_UNSAFE_NATIVE_DISPATCH=0 selects slow execute_normal fallback"))
+        #expect(source.contains("jit_watchdog_arm(true)"))
+        #expect(source.contains("jit_watchdog_arm(false)"))
+    }
+
     @Test("Audio shutdown releases callback before closing SDL")
     func audioShutdownOrdering() throws {
         let source = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/audio_sdl.cpp"), encoding: .utf8)

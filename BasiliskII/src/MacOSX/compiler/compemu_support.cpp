@@ -105,6 +105,7 @@ extern "C" bool jit_consume_native_bad_target(void);
 
 static std::atomic<uint64_t> jit_watchdog_deadline_ns { 0 };
 static std::atomic<uae_u32> jit_watchdog_guest_pc { 0 };
+static std::atomic<bool> jit_watchdog_bootstrap { false };
 static pthread_once_t jit_watchdog_once = PTHREAD_ONCE_INIT;
 
 static uint64_t jit_watchdog_monotonic_ns(void)
@@ -124,7 +125,8 @@ static void *jit_watchdog_thread(void *)
 			/* Disarm before stopping so continuing in LLDB grants a fresh window. */
 			jit_watchdog_deadline_ns.store(0, std::memory_order_release);
 			fprintf(stderr,
-				"JIT_FAILSAFE native dispatch exceeded 10 seconds guest_pc=%08x; pausing process %d\n",
+				"JIT_FAILSAFE %s exceeded 10 seconds guest_pc=%08x; pausing process %d\n",
+				jit_watchdog_bootstrap.load(std::memory_order_relaxed) ? "bootstrap dispatch" : "native dispatch",
 				(unsigned)jit_watchdog_guest_pc.load(std::memory_order_relaxed),
 				(int)getpid());
 			fflush(stderr);
@@ -141,9 +143,10 @@ static void jit_watchdog_start_once(void)
 		pthread_detach(thread);
 }
 
-static void jit_watchdog_arm(void)
+static void jit_watchdog_arm(bool bootstrap)
 {
 	pthread_once(&jit_watchdog_once, jit_watchdog_start_once);
+	jit_watchdog_bootstrap.store(bootstrap, std::memory_order_relaxed);
 	jit_watchdog_guest_pc.store((uae_u32)m68k_getpc(), std::memory_order_relaxed);
 	jit_watchdog_deadline_ns.store(
 		jit_watchdog_monotonic_ns() + UINT64_C(10000000000),
@@ -153,6 +156,13 @@ static void jit_watchdog_arm(void)
 static void jit_watchdog_disarm(void)
 {
 	jit_watchdog_deadline_ns.store(0, std::memory_order_release);
+	jit_watchdog_bootstrap.store(false, std::memory_order_relaxed);
+}
+
+static bool jit_bootstrap_watchdog_enabled(void)
+{
+	const char *value = getenv("B2_JIT_BOOTSTRAP_WATCHDOG");
+	return value && *value && strcmp(value, "0") != 0;
 }
 #endif
 
@@ -206,7 +216,14 @@ void m68k_do_compile_execute(void)
 		if (bootstrapped_dispatcher != pushall_call_handler) {
 			bootstrapped_dispatcher = pushall_call_handler;
 			write_log("JIT: ARM64: bootstrapping first dispatch through execute_normal()\n");
+			const bool bootstrap_watchdog = jit_bootstrap_watchdog_enabled();
+			if (bootstrap_watchdog)
+				jit_watchdog_arm(true);
 			execute_normal();
+			if (bootstrap_watchdog)
+				jit_watchdog_disarm();
+			write_log("JIT: ARM64: first execute_normal() returned pc=%08x pc_p=%p\n",
+				(unsigned)m68k_getpc(), (void *)regs.pc_p);
 		} else {
 				const uae_u32 cl = cacheline(regs.pc_p);
 				cpuop_func *handler = cache_tags[cl].handler;
@@ -216,9 +233,10 @@ void m68k_do_compile_execute(void)
 					/* Safe C dispatch is the only supported default while native block-return validation is incomplete. */
 						const char *value = getenv("B2_JIT_UNSAFE_NATIVE_DISPATCH");
 						allow_unsafe_native_dispatch = !value || value[0] != '0';
-						/* native dispatch disabled */
-
-					/* native dispatch may be disabled via environment */
+						if (jit_diag_enabled())
+							fprintf(stderr,
+								"JIT_DIAG native_dispatch=%s (B2_JIT_UNSAFE_NATIVE_DISPATCH=0 selects slow execute_normal fallback)\n",
+								allow_unsafe_native_dispatch ? "enabled" : "disabled");
 				}
 				if (jit_diag_enabled()) {
 					static unsigned long dispatch_count = 0;
@@ -252,7 +270,7 @@ void m68k_do_compile_execute(void)
 					execute_normal();
 				} else {
 					jit_prepare_native_execute();
-					jit_watchdog_arm();
+					jit_watchdog_arm(false);
 #endif
 					((compiled_handler)(pushall_call_handler))();
 #if defined(CPU_AARCH64)
