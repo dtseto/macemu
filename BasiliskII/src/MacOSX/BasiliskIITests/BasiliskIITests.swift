@@ -193,6 +193,20 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("cache_miss"))
     }
 
+    @Test("ARM64 JIT dispatch tracing distinguishes native and safe paths")
+    func arm64JITDispatchTracingDistinguishesPaths() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu_support.cpp"),
+            encoding: .utf8
+        )
+        #expect(source.contains("B2_JIT_DISPATCH_TRACE"))
+        #expect(source.contains("JIT_DISPATCH phase=%s pc=%08x pc_p=%p"))
+        #expect(source.contains("jit_dispatch_trace(\"safe_c_dispatch\""))
+        #expect(source.contains("jit_dispatch_trace(\"native_dispatch\""))
+        #expect(source.contains("jit_dispatch_trace(\"bootstrap\""))
+        #expect(source.contains("if (remaining == 0)"))
+    }
+
     @Test("Audio shutdown releases callback before closing SDL")
     func audioShutdownOrdering() throws {
         let source = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/audio_sdl.cpp"), encoding: .utf8)
