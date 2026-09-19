@@ -2346,11 +2346,45 @@ static bool interpreter_generated_goto_validate_opcode(uae_u16 opcode)
 struct interpreter_threaded_state_snapshot {
 	struct regstruct regs;
 	struct flag_struct regflags;
+	uaecptr guest_pc;
 };
 
 static unsigned long long interpreter_threaded_dispatches = 0;
 static unsigned long long interpreter_threaded_fallbacks = 0;
 static unsigned long long interpreter_threaded_inline_counts[65536] = {};
+
+static bool interpreter_threaded_is_ext(uae_u32 opcode)
+{
+	return (opcode & 0xffc0) == 0x4880 ||
+		(opcode & 0xffc0) == 0x48c0 ||
+		(opcode & 0xffc0) == 0x49c0;
+}
+
+static void interpreter_threaded_execute_ext(uae_u32 opcode)
+{
+	const unsigned source_register = opcode & 7;
+	const uae_s32 source = (uae_s32)m68k_dreg(regs, source_register);
+	if ((opcode & 0xffc0) == 0x4880) {
+		const uae_s16 value = (uae_s16)(uae_s8)source;
+		m68k_dreg(regs, source_register) =
+			(m68k_dreg(regs, source_register) & 0xffff0000) | ((uae_u16)value);
+		CLEAR_CZNV();
+		SET_ZFLG(value == 0);
+		SET_NFLG(value < 0);
+	} else if ((opcode & 0xffc0) == 0x48c0) {
+		const uae_s32 value = (uae_s32)(uae_s16)source;
+		m68k_dreg(regs, source_register) = (uae_u32)value;
+		CLEAR_CZNV();
+		SET_ZFLG(value == 0);
+		SET_NFLG(value < 0);
+	} else {
+		const uae_s32 value = (uae_s32)(uae_s8)source;
+		m68k_dreg(regs, source_register) = (uae_u32)value;
+		CLEAR_CZNV();
+		SET_ZFLG(value == 0);
+		SET_NFLG(value < 0);
+	}
+}
 
 static bool interpreter_threaded_metrics_enabled()
 {
@@ -2395,13 +2429,58 @@ static void interpreter_threaded_snapshot(interpreter_threaded_state_snapshot &s
 	MakeSR();
 	snapshot.regs = regs;
 	snapshot.regflags = regflags;
+	snapshot.guest_pc = m68k_getpc();
 }
 
 static bool interpreter_threaded_snapshot_equal(const interpreter_threaded_state_snapshot &lhs,
 	const interpreter_threaded_state_snapshot &rhs)
 {
-	return memcmp(&lhs.regs, &rhs.regs, sizeof(lhs.regs)) == 0 &&
-		memcmp(&lhs.regflags, &rhs.regflags, sizeof(lhs.regflags)) == 0;
+	return memcmp(lhs.regs.regs, rhs.regs.regs, sizeof(lhs.regs.regs)) == 0 &&
+		lhs.regs.usp == rhs.regs.usp &&
+		lhs.regs.isp == rhs.regs.isp &&
+		lhs.regs.msp == rhs.regs.msp &&
+		lhs.regs.sr == rhs.regs.sr &&
+		lhs.regs.t1 == rhs.regs.t1 &&
+		lhs.regs.t0 == rhs.regs.t0 &&
+		lhs.regs.s == rhs.regs.s &&
+		lhs.regs.m == rhs.regs.m &&
+		lhs.regs.stopped == rhs.regs.stopped &&
+		lhs.regs.intmask == rhs.regs.intmask &&
+		lhs.regs.pc == rhs.regs.pc &&
+		lhs.regs.fault_pc == rhs.regs.fault_pc &&
+		lhs.regs.spcflags == rhs.regs.spcflags &&
+		memcmp(&lhs.regflags, &rhs.regflags, sizeof(lhs.regflags)) == 0 &&
+		lhs.guest_pc == rhs.guest_pc;
+}
+
+static unsigned interpreter_threaded_snapshot_difference(
+	const interpreter_threaded_state_snapshot &lhs,
+	const interpreter_threaded_state_snapshot &rhs,
+	unsigned &register_difference)
+{
+	unsigned difference = 0;
+	register_difference = 0;
+	for (unsigned i = 0; i < 16; i++) {
+		if (lhs.regs.regs[i] != rhs.regs.regs[i])
+			register_difference |= 1u << i;
+	}
+	if (register_difference)
+		difference |= 1u << 0;
+	if (lhs.guest_pc != rhs.guest_pc || lhs.regs.pc != rhs.regs.pc)
+		difference |= 1u << 1;
+	if (lhs.regs.sr != rhs.regs.sr ||
+		memcmp(&lhs.regflags, &rhs.regflags, sizeof(lhs.regflags)) != 0)
+		difference |= 1u << 2;
+	if (lhs.regs.usp != rhs.regs.usp || lhs.regs.isp != rhs.regs.isp ||
+		lhs.regs.msp != rhs.regs.msp || lhs.regs.s != rhs.regs.s ||
+		lhs.regs.m != rhs.regs.m || lhs.regs.t1 != rhs.regs.t1 ||
+		lhs.regs.t0 != rhs.regs.t0 || lhs.regs.stopped != rhs.regs.stopped ||
+		lhs.regs.intmask != rhs.regs.intmask)
+		difference |= 1u << 3;
+	if (lhs.regs.fault_pc != rhs.regs.fault_pc ||
+		lhs.regs.spcflags != rhs.regs.spcflags)
+		difference |= 1u << 4;
+	return difference;
 }
 
 /* NOP and MOVEQ have no memory effects, so a complete CPU/register snapshot is
@@ -2418,11 +2497,66 @@ static void interpreter_threaded_validate_inline(uae_u32 opcode,
 	(*normal_handler)(opcode);
 	interpreter_threaded_state_snapshot normal;
 	interpreter_threaded_snapshot(normal);
-	if (!interpreter_threaded_snapshot_equal(fast, normal))
-		fprintf(stderr, "B2_INTERP threaded validation mismatch opcode=%04x\n",
-			(unsigned)opcode);
+	if (!interpreter_threaded_snapshot_equal(fast, normal)) {
+		unsigned register_difference = 0;
+		const unsigned difference = interpreter_threaded_snapshot_difference(
+			fast, normal, register_difference);
+		fprintf(stderr,
+			"B2_INTERP threaded validation mismatch opcode=%04x fields=%02x regs=%04x "
+			"fastpc=%08x normalpc=%08x fastsr=%04x normalsr=%04x "
+			"fastfault=%08x normalfault=%08x fastspc=%08x normalspc=%08x "
+			"flags_equal=%u\n",
+			(unsigned)opcode, difference, register_difference,
+			(unsigned)fast.guest_pc, (unsigned)normal.guest_pc,
+			(unsigned)fast.regs.sr, (unsigned)normal.regs.sr,
+			(unsigned)fast.regs.fault_pc, (unsigned)normal.regs.fault_pc,
+			(unsigned)fast.regs.spcflags, (unsigned)normal.regs.spcflags,
+			(unsigned)(memcmp(&fast.regflags, &normal.regflags,
+				sizeof(fast.regflags)) == 0));
+	}
 	regs = fast.regs;
 	regflags = fast.regflags;
+}
+
+static void interpreter_threaded_ext_selftest()
+{
+	static bool initialized = false;
+	if (initialized)
+		return;
+	initialized = true;
+	const char *enabled = getenv("B2_INTERP_THREADED_EXT_SELFTEST");
+	if (!enabled || !enabled[0] || strcmp(enabled, "0") == 0)
+		return;
+
+	const struct regstruct saved_regs = regs;
+	const struct flag_struct saved_flags = regflags;
+	const uae_u32 values[] = { 0, 1, 0x7f, 0x80, 0x8000, 0xffff, 0x80000000 };
+	const uae_u16 opcodes[] = { 0x4880, 0x48c0, 0x49c0 };
+	for (unsigned op = 0; op < sizeof(opcodes) / sizeof(opcodes[0]); op++) {
+		for (unsigned value_index = 0; value_index < sizeof(values) / sizeof(values[0]); value_index++) {
+			regs = saved_regs;
+			regflags = saved_flags;
+			m68k_dreg(regs, 0) = values[value_index];
+			interpreter_threaded_state_snapshot before;
+			interpreter_threaded_snapshot(before);
+			cpufunctbl[opcodes[op]](opcodes[op]);
+			interpreter_threaded_state_snapshot normal;
+			interpreter_threaded_snapshot(normal);
+
+			regs = before.regs;
+			regflags = before.regflags;
+			interpreter_threaded_execute_ext(opcodes[op]);
+			m68k_incpc(2);
+			interpreter_threaded_state_snapshot fast;
+			interpreter_threaded_snapshot(fast);
+			if (!interpreter_threaded_snapshot_equal(fast, normal))
+				fprintf(stderr, "B2_INTERP EXT selftest mismatch opcode=%04x value=%08x\\n",
+					(unsigned)opcodes[op], (unsigned)values[value_index]);
+		}
+	}
+	regs = saved_regs;
+	regflags = saved_flags;
+	fprintf(stderr, "B2_INTERP EXT selftest completed\\n");
 }
 #endif
 
@@ -2473,7 +2607,15 @@ void m68k_do_execute (void)
 		threaded_targets[0x4e71] = &&interpreter_threaded_nop;
 		for (unsigned i = 0x7000; i <= 0x70ff; i++)
 			threaded_targets[i] = &&interpreter_threaded_moveq;
+		for (unsigned i = 0x4880; i <= 0x4887; i++)
+			threaded_targets[i] = &&interpreter_threaded_ext;
+		for (unsigned i = 0x48c0; i <= 0x48c7; i++)
+			threaded_targets[i] = &&interpreter_threaded_ext;
+		for (unsigned i = 0x49c0; i <= 0x49c7; i++)
+			threaded_targets[i] = &&interpreter_threaded_ext;
 		threaded_targets_initialized = true;
+		fprintf(stderr, "B2_INTERP threaded prototype enabled (NOP/MOVEQ/EXT island)\\n");
+		interpreter_threaded_ext_selftest();
 	}
 #endif
     for (;;) {
@@ -2608,7 +2750,8 @@ void m68k_do_execute (void)
 		if (threaded_metrics)
 			interpreter_threaded_dispatches++;
 		validate_threaded_inline = threaded_validation &&
-			(opcode == 0x4e71 || (opcode & 0xff00) == 0x7000);
+			(opcode == 0x4e71 || (opcode & 0xff00) == 0x7000 ||
+			 interpreter_threaded_is_ext(opcode));
 		if (validate_threaded_inline)
 			interpreter_threaded_snapshot(threaded_before);
 		goto *threaded_targets[opcode];
@@ -2623,6 +2766,7 @@ interpreter_threaded_fallback:
 	cpufunctbl[opcode](opcode);
 	goto interpreter_dispatch_complete;
 interpreter_threaded_nop:
+	m68k_incpc(2);
 	if (threaded_metrics)
 		interpreter_threaded_inline_counts[opcode]++;
 	if (validate_threaded_inline)
@@ -2635,6 +2779,27 @@ interpreter_threaded_moveq: {
 	SET_NFLG(value < 0);
 	SET_VFLG(0);
 	SET_CFLG(0);
+	m68k_incpc(2);
+	if (threaded_metrics)
+		interpreter_threaded_inline_counts[opcode]++;
+	if (validate_threaded_inline)
+		interpreter_threaded_validate_inline(opcode, handler, threaded_before);
+	goto interpreter_dispatch_complete;
+}
+interpreter_threaded_ext: {
+	static unsigned ext_reported = 0;
+	if (ext_reported != 0x07) {
+		const unsigned kind = (opcode & 0xffc0) == 0x4880 ? 1 :
+			((opcode & 0xffc0) == 0x48c0 ? 2 : 4);
+		if ((ext_reported & kind) == 0) {
+			fprintf(stderr, "B2_INTERP threaded EXT first-use size=%s opcode=%04x\\n",
+				kind == 1 ? "W" : (kind == 2 ? "L" : "B"),
+				(unsigned)opcode);
+			ext_reported |= kind;
+		}
+	}
+	interpreter_threaded_execute_ext(opcode);
+	m68k_incpc(2);
 	if (threaded_metrics)
 		interpreter_threaded_inline_counts[opcode]++;
 	if (validate_threaded_inline)
