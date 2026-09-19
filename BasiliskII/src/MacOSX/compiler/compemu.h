@@ -43,8 +43,17 @@ typedef uae_u32 uintptr;
 #endif
 #endif
 
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+#ifndef B2_ARM64_JIT
+#define B2_ARM64_JIT 0
+#endif
+#ifndef USE_JIT
+#define USE_JIT B2_ARM64_JIT
+#endif
+#else
 #ifndef USE_JIT
 #define USE_JIT 0
+#endif
 #endif
 
 #if USE_JIT
