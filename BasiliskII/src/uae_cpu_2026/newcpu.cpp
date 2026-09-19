@@ -2242,7 +2242,7 @@ static bool interpreter_opcode_histogram_enabled()
 							best = opcode;
 					if (interpreter_opcode_counts[best] == 0)
 						break;
-					fprintf(stderr, "B2_METRIC cpu.interpreter_opcode_%04x=%llu\\n",
+					fprintf(stderr, "B2_METRIC cpu.interpreter_opcode_%04x=%llu\n",
 						best, (unsigned long long)interpreter_opcode_counts[best]);
 					interpreter_opcode_counts[best] = 0;
 				}
@@ -2342,6 +2342,90 @@ static bool interpreter_generated_goto_validate_opcode(uae_u16 opcode)
 }
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+struct interpreter_threaded_state_snapshot {
+	struct regstruct regs;
+	struct flag_struct regflags;
+};
+
+static unsigned long long interpreter_threaded_dispatches = 0;
+static unsigned long long interpreter_threaded_fallbacks = 0;
+static unsigned long long interpreter_threaded_inline_counts[65536] = {};
+
+static bool interpreter_threaded_metrics_enabled()
+{
+	static int cached = -1;
+	if (cached < 0) {
+		const char *enabled = getenv("B2_INTERP_THREADED_METRICS");
+		cached = enabled && enabled[0] && strcmp(enabled, "0") != 0 ? 1 : 0;
+		if (cached) {
+			atexit([] {
+				unsigned long long inline_count = 0;
+				for (unsigned opcode = 0; opcode < 65536; opcode++)
+					inline_count += interpreter_threaded_inline_counts[opcode];
+				const unsigned long long total = interpreter_threaded_dispatches;
+				const unsigned long long fallback = interpreter_threaded_fallbacks;
+				const double fallback_percent = total ?
+					(100.0 * (double)fallback / (double)total) : 0.0;
+				fprintf(stderr,
+					"B2_METRIC threaded.dispatches=%llu fallback=%llu inline=%llu fallback_percent=%.2f\n",
+					 total, fallback, inline_count, fallback_percent);
+				for (unsigned opcode = 0; opcode < 65536; opcode++)
+					if (interpreter_threaded_inline_counts[opcode])
+						fprintf(stderr, "B2_METRIC threaded.opcode_%04x=%llu\n",
+							opcode, interpreter_threaded_inline_counts[opcode]);
+			});
+		}
+	}
+	return cached != 0;
+}
+
+static bool interpreter_threaded_validation_enabled()
+{
+	static int cached = -1;
+	if (cached < 0) {
+		const char *enabled = getenv("B2_INTERP_THREADED_VALIDATE");
+		cached = enabled && enabled[0] && strcmp(enabled, "0") != 0 ? 1 : 0;
+	}
+	return cached != 0;
+}
+
+static void interpreter_threaded_snapshot(interpreter_threaded_state_snapshot &snapshot)
+{
+	MakeSR();
+	snapshot.regs = regs;
+	snapshot.regflags = regflags;
+}
+
+static bool interpreter_threaded_snapshot_equal(const interpreter_threaded_state_snapshot &lhs,
+	const interpreter_threaded_state_snapshot &rhs)
+{
+	return memcmp(&lhs.regs, &rhs.regs, sizeof(lhs.regs)) == 0 &&
+		memcmp(&lhs.regflags, &rhs.regflags, sizeof(lhs.regflags)) == 0;
+}
+
+/* NOP and MOVEQ have no memory effects, so a complete CPU/register snapshot is
+ * sufficient to run the normal handler as a diagnostic and restore the inline
+ * result. This hook is deliberately restricted to those two proven handlers. */
+static void interpreter_threaded_validate_inline(uae_u32 opcode,
+	cpuop_func *normal_handler,
+	const interpreter_threaded_state_snapshot &before)
+{
+	interpreter_threaded_state_snapshot fast;
+	interpreter_threaded_snapshot(fast);
+	regs = before.regs;
+	regflags = before.regflags;
+	(*normal_handler)(opcode);
+	interpreter_threaded_state_snapshot normal;
+	interpreter_threaded_snapshot(normal);
+	if (!interpreter_threaded_snapshot_equal(fast, normal))
+		fprintf(stderr, "B2_INTERP threaded validation mismatch opcode=%04x\n",
+			(unsigned)opcode);
+	regs = fast.regs;
+	regflags = fast.regflags;
+}
+#endif
+
 static void interpreter_dispatch_breakpoint(uae_u32 pc, uae_u16 opcode)
 {
 	static int initialized = 0;
@@ -2378,6 +2462,10 @@ void m68k_do_execute (void)
 	static void *threaded_targets[65536];
 	static bool threaded_targets_initialized = false;
 	const bool threaded_prototype = interpreter_threaded_prototype_enabled();
+	const bool threaded_metrics = threaded_prototype && interpreter_threaded_metrics_enabled();
+	const bool threaded_validation = threaded_prototype && interpreter_threaded_validation_enabled();
+	interpreter_threaded_state_snapshot threaded_before = {};
+	bool validate_threaded_inline = false;
 	const bool generated_goto = interpreter_generated_goto_enabled();
 	if (threaded_prototype && !threaded_targets_initialized) {
 		for (unsigned i = 0; i < 65536; i++)
@@ -2516,16 +2604,29 @@ void m68k_do_execute (void)
 			goto interpreter_dispatch_complete;
 		}
 	}
-	if (threaded_prototype)
+	if (threaded_prototype) {
+		if (threaded_metrics)
+			interpreter_threaded_dispatches++;
+		validate_threaded_inline = threaded_validation &&
+			(opcode == 0x4e71 || (opcode & 0xff00) == 0x7000);
+		if (validate_threaded_inline)
+			interpreter_threaded_snapshot(threaded_before);
 		goto *threaded_targets[opcode];
+	}
 #endif
 	(*handler)(opcode);
 	goto interpreter_dispatch_complete;
 #if defined(__GNUC__) || defined(__clang__)
 interpreter_threaded_fallback:
-	(*handler)(opcode);
+	if (threaded_metrics)
+		interpreter_threaded_fallbacks++;
+	cpufunctbl[opcode](opcode);
 	goto interpreter_dispatch_complete;
 interpreter_threaded_nop:
+	if (threaded_metrics)
+		interpreter_threaded_inline_counts[opcode]++;
+	if (validate_threaded_inline)
+		interpreter_threaded_validate_inline(opcode, handler, threaded_before);
 	goto interpreter_dispatch_complete;
 interpreter_threaded_moveq: {
 	const uae_s32 value = (uae_s32)(uae_s8)(opcode & 0xff);
@@ -2534,6 +2635,10 @@ interpreter_threaded_moveq: {
 	SET_NFLG(value < 0);
 	SET_VFLG(0);
 	SET_CFLG(0);
+	if (threaded_metrics)
+		interpreter_threaded_inline_counts[opcode]++;
+	if (validate_threaded_inline)
+		interpreter_threaded_validate_inline(opcode, handler, threaded_before);
 	goto interpreter_dispatch_complete;
 }
 #endif
