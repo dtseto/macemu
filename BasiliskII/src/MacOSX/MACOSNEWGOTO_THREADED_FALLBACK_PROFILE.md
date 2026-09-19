@@ -5,6 +5,9 @@ Branch: `macosnewgoto`
 Mode: `B2_INTERP_THREADED_PROTO=1`, `B2_INTERP_THREADED_METRICS=1`
 Validation: MOVE self-test enabled; no runtime crash or hang observed
 
+The counts below are from the captured diagnostic run; subsequent commits add
+diagnostics and a benchmark harness but do not provide a new timing result.
+
 ## Summary
 
 The latest shutdown summary reported:
@@ -34,6 +37,15 @@ The corresponding coarse family totals were:
 
 The console displayed the aggregate summary twice, but the counters above are
 from one emitted metrics set and are not doubled.
+
+## Current diagnostic controls
+
+`B2_INTERP_THREADED_METRICS=1` now emits the top 100 exact fallback opcodes in
+addition to the family totals. `B2_INTERP_THREADED_TABLE_SELFTEST=1` checks the
+65,536-entry target table's fallback, NOP, and MOVEQ mappings at initialization
+and reports the mapped/fallback counts. Keep both controls enabled only for
+diagnostic runs; their counters and table scan are not suitable for timing
+comparisons.
 
 ## Top fallback opcodes
 
@@ -90,3 +102,18 @@ profile. Add and validate one family at a time:
 
 Do not inline the ranked fallback forms above without a separate state and
 runtime validation plan.
+
+## Deterministic interpreter benchmark
+
+For repeatable dispatch/memory comparisons, use the separate no-JIT CPU
+microbenchmark:
+
+```sh
+B2_BENCH_CPU=1 B2_BENCH_CPU_ITERATIONS=100000000 BasiliskII --config benchmark.conf
+```
+
+It runs a synthetic `MOVE.L`/`SUBQ.L`/`BNE.S` loop, verifies D0 reaches zero,
+and reports elapsed nanoseconds and nanoseconds per guest instruction. The
+iteration count defaults to 100,000,000. This profile contains no benchmark
+timings yet, so comparisons should be recorded only after identical binaries,
+iteration counts, and host conditions are used.

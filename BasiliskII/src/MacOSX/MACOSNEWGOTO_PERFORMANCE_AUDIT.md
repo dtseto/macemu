@@ -1,8 +1,8 @@
 # macosnewgoto Performance Audit
 
-Audit date: 2026-09-18  
+Audit date: 2026-09-19
 Branch: `macosnewgoto`  
-Branch HEAD: `2adb74d9` (`Restore universal x86 JIT build`)  
+Branch HEAD: `80680991` (`Add deterministic CPU microbenchmark`)
 Comparison source: `https://github.com/kanjitalk755/macemu` at `892eeb74` (`master`, 2026-09-18 checkout)  
 Scope: Basilisk II sources and the macOS/Xcode path in this branch.
 
@@ -22,7 +22,8 @@ Already present in `macosnewgoto`:
 Still missing or incomplete:
 
 - The full interpreter still executes one function-pointer handler per opcode in the normal path.
-- ARM/AArch64 byte swapping is now optimized in `BasiliskII/src/Unix/sysdeps.h`; target-generated code emits `rev`/`rev16`.
+- ARM/AArch64 byte swapping is now optimized in `BasiliskII/src/Unix/sysdeps.h`; target-generated code emits `rev`/`rev16`. The direct-addressing interpreter path also uses pointer-sized fast RAM helpers with bounds-checked fallback for non-RAM addresses.
+- The interpreter now has a deterministic no-JIT CPU microbenchmark and opt-in self-tests for the fast-memory and threaded dispatch-table paths; these provide repeatable validation but are not performance results by themselves.
 - `configure.ac` now adds conservative ARM baseline `-O3`/`-march` settings. CPU-specific `-mtune` and macOS-specific tuning remain intentionally unset; the macOS Xcode target has AArch64 defines but no LTO configuration.
 - SDL2 now uses a shared non-blocking SPSC audio ring buffer; SDL3 continues to use its native SDL_AudioStream worker model. The default SDL2 device block remains preference-controlled rather than forced to 2048 frames.
 - No VNC server/async VNC conversion implementation exists in this repository path.
@@ -67,10 +68,10 @@ Still missing or incomplete:
 
 | ID | Status | Finding |
 |---|---|---|
-| C.1 | **Present** | `BasiliskII/src/Unix/sysdeps.h` now declares ARM/AArch64 unaligned scalar access and uses `__builtin_bswap32/16`; Clang verification emitted `ldr` + `rev` for ARM64 and ARMv7. |
+| C.1 | **Present, self-test available** | `BasiliskII/src/Unix/sysdeps.h` now declares ARM/AArch64 unaligned scalar access and uses `__builtin_bswap32/16`; the interpreter direct-addressing path adds pointer-sized, bounds-checked fast RAM helpers in `uae_cpu_2026/memory.h`. `B2_FAST_MEMORY_SELFTEST=1` checks unaligned big-endian reads/writes. Clang verification emitted `ldr` + `rev` for ARM64 and ARMv7. |
 | C.2 | **Partial** | `uae_cpu_2026/m68k.h:742-1705` contains the AArch64 optimized flag block, and `uae_cpu_2026.xcodeproj/project.pbxproj:605-607,647-649` defines AArch64 assembly flags. `configure.ac` now has ARM tuning but still lacks the generic ARM/AArch64 assembly define branch. |
 | C.3 | **Present** | `uae_cpu_2026/spcflags.h:79-87` uses GCC atomic fetch-or/fetch-and with a fallback for other platforms. |
-| C.4 | **Partial** | Computed-goto generation and runtime gates exist, but the generated wrapper still calls the ordinary handler at each label, and the small prototype only fast-paths NOP/MOVEQ. It is opt-in and not a complete threaded interpreter. |
+| C.4 | **Partial — instrumented prototype** | Computed-goto generation and runtime gates exist, but the generated wrapper still calls the ordinary handler at each label, and the small prototype only fast-paths NOP/MOVEQ/EXT/register-only MOVE. It is opt-in and not a complete threaded interpreter. Fallback opcode ranking and family metrics are available; `B2_INTERP_THREADED_TABLE_SELFTEST=1` checks the dispatch table mappings. |
 | C.5 | **Missing** | `newcpu.cpp:2616` calls `cpu_check_ticks()` separately from the SPCFLAGS test. |
 | C.6 | **Present** | `uae_cpu_2026/spcflags.h:105-119` and the STOP path in `newcpu.cpp:2090` call `SleepAndWait()`. |
 
@@ -159,6 +160,33 @@ This is a source/build audit, not a performance claim. Before marking the remain
 
 ## Runtime measurement status
 
+### Deterministic interpreter microbenchmark (2026-09-19)
+
+`B2_BENCH_CPU=1` enables a synthetic, deterministic no-JIT loop in
+`BasiliskII/src/uae_cpu_2026/basilisk_glue.cpp`. It executes a 68K
+`MOVE.L` initialization followed by repeated `SUBQ.L`/`BNE.S` instructions and
+checks that D0 reaches zero. The iteration count defaults to 100,000,000 and
+can be overridden with `B2_BENCH_CPU_ITERATIONS` (1 through `0xffffffff`).
+The harness reports status, elapsed nanoseconds, and nanoseconds per guest
+instruction:
+
+```sh
+B2_BENCH_CPU=1 B2_BENCH_CPU_ITERATIONS=100000000 BasiliskII --config benchmark.conf
+```
+
+The benchmark forces `jit=0`, so it is suitable for comparing interpreter
+dispatch or memory-access changes with the same binary, environment, and
+iteration count. No benchmark timing result has been recorded in this audit;
+the harness is not itself evidence of a speedup.
+
+The ARM64 direct-addressing memory path can be sanity-checked independently:
+
+```sh
+B2_FAST_MEMORY_SELFTEST=1 BasiliskII --config benchmark.conf
+```
+
+Expected output includes `B2_FAST_MEMORY_SELFTEST passed (unaligned/big-endian)`.
+
 ### Threaded prototype validation (2026-09-19)
 
 The threaded interpreter remains **Partial — safe inline opcode island**. The
@@ -199,14 +227,19 @@ rate. Its inline MOVE counts were approximately 550,000 MOVE.B, 535,000
 MOVE.W, and 1,000,000 MOVE.L operations. These numbers describe diagnostic
 runs only; they do not establish a
 performance improvement. The high aggregate fallback percentage is expected
-because the inline island is intentionally small. The current counters do not
-identify the most frequent unsupported opcode, so the next candidate should
-be selected only after adding or using fallback-opcode profiling.
+because the inline island is intentionally small. Metrics now identify the top
+100 unsupported opcodes and emit coarse fallback-family totals, so the next
+candidate can be selected from a captured profile rather than aggregate counts
+alone. These metrics remain diagnostic and should not be enabled for timing
+comparisons.
 
 Register-only MOVE is deliberately restricted to Dn→Dn with no memory or
 addressing-mode side effects. `B2_INTERP_THREADED_MOVE_SELFTEST=1` exercises
 MOVE.B/W/L against the normal handlers. The inline label also rejects any
 unexpected opcode and immediately transfers to the normal fallback label.
+`B2_INTERP_THREADED_TABLE_SELFTEST=1` additionally verifies that the fallback,
+NOP, and MOVEQ entries in the 65,536-entry target table map to the expected
+labels and reports the mapped/fallback counts.
 
 The logged `ALINE_EXC nr=10` was also reproduced with
 `B2_INTERP_THREADED_PROTO=0`, at the same guest PC, and the emulator continued
@@ -218,11 +251,12 @@ The command-line clean was blocked by permissions on the shared Xcode
 DerivedData directory. Runtime checks reached at least 255 million
 instructions with the prototype enabled and no host crash or hang.
 
-The next safe step is fallback-opcode profiling to identify a genuinely common
-unsupported opcode before adding another family. A candidate should remain a
-register-only operation with no memory, privilege, supervisor, interrupt,
-JIT-tracing, or unusual-PC behavior. Do not add memory MOVE forms, addressing
-modes, TST, or broader register operations until each is separately validated.
+The fallback-opcode profiler is now present. The next safe step is to capture
+an equivalent profile with `B2_INTERP_THREADED_METRICS=1` and select a
+genuinely common unsupported opcode. A candidate should remain a register-only
+operation with no memory, privilege, supervisor, interrupt, JIT-tracing, or
+unusual-PC behavior. Do not add memory MOVE forms, addressing modes, TST, or
+broader register operations until each is separately validated.
 
 The fallback profile is recorded separately in
 `MACOSNEWGOTO_THREADED_FALLBACK_PROFILE.md`. Its top entries are dominated by
