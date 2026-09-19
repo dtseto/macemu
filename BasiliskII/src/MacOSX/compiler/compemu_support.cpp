@@ -166,7 +166,7 @@ static bool jit_bootstrap_watchdog_enabled(void)
 }
 
 static void jit_dispatch_trace(const char *phase, uae_u32 pc, const void *pc_p,
-	uae_u32 cl, const void *handler, const void *bi, bool native_allowed)
+	uae_u32 cl, uintptr handler, const void *bi, bool native_allowed)
 {
 	static long remaining = -1;
 	if (remaining < 0) {
@@ -180,7 +180,7 @@ static void jit_dispatch_trace(const char *phase, uae_u32 pc, const void *pc_p,
 	--remaining;
 	fprintf(stderr,
 		"JIT_DISPATCH phase=%s pc=%08x pc_p=%p cl=%u handler=%p bi=%p native_allowed=%d\n",
-		phase, (unsigned)pc, pc_p, (unsigned)cl, handler, bi,
+		phase, (unsigned)pc, pc_p, (unsigned)cl, (void *)handler, bi,
 		native_allowed ? 1 : 0);
 	fflush(stderr);
 }
@@ -236,7 +236,7 @@ void m68k_do_compile_execute(void)
 		if (bootstrapped_dispatcher != pushall_call_handler) {
 			bootstrapped_dispatcher = pushall_call_handler;
 			write_log("JIT: ARM64: bootstrapping first dispatch through execute_normal()\n");
-			jit_dispatch_trace("bootstrap", m68k_getpc(), regs.pc_p, 0, NULL, NULL, false);
+			jit_dispatch_trace("bootstrap", m68k_getpc(), regs.pc_p, 0, 0, NULL, false);
 			const bool bootstrap_watchdog = jit_bootstrap_watchdog_enabled();
 			if (bootstrap_watchdog)
 				jit_watchdog_arm(true);
@@ -276,7 +276,7 @@ void m68k_do_compile_execute(void)
 				if (!allow_unsafe_native_dispatch || !bi ||
 					handler == popall_execute_normal) {
 					jit_dispatch_trace("safe_c_dispatch", m68k_getpc(), regs.pc_p, cl,
-						handler, bi, allow_unsafe_native_dispatch);
+						 (uintptr)handler, bi, allow_unsafe_native_dispatch);
 					if (jit_diag_enabled()) {
 						static unsigned long safe_dispatch_count = 0;
 						safe_dispatch_count++;
@@ -293,7 +293,7 @@ void m68k_do_compile_execute(void)
 					execute_normal();
 				} else {
 					jit_dispatch_trace("native_dispatch", m68k_getpc(), regs.pc_p, cl,
-						handler, bi, allow_unsafe_native_dispatch);
+						 (uintptr)handler, bi, allow_unsafe_native_dispatch);
 					jit_prepare_native_execute();
 					jit_watchdog_arm(false);
 #endif
