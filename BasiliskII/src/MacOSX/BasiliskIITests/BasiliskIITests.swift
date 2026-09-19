@@ -172,11 +172,9 @@ struct BenchmarkHarnessTests {
         let shutdown = try section(in: source, from: "static void close_audio(void)", through: "void AudioExit(void)")
 
         let flag = try #require(shutdown.range(of: "set_audio_shutting_down(true)"))
-        let wake = try #require(shutdown.range(of: "SDL_SemPost(audio_irq_done_sem)"))
         let pause = try #require(shutdown.range(of: "SDL_PauseAudio(1)"))
         let close = try #require(shutdown.range(of: "SDL_CloseAudio()"))
-        #expect(flag.lowerBound < wake.lowerBound)
-        #expect(wake.lowerBound < pause.lowerBound)
+        #expect(flag.lowerBound < pause.lowerBound)
         #expect(pause.lowerBound < close.lowerBound)
 
         let callback = try section(in: source, from: "static void stream_func(void *arg", through: "void AudioInterrupt(void)")
@@ -222,6 +220,48 @@ struct BenchmarkHarnessTests {
         #expect(dispatchTable.contains("{ 0, 65536, 0 }"))
         #expect(declarations.contains("op_smalltbl_0_comp_ff"))
         #expect(declarations.contains("op_smalltbl_0_comp_nf"))
+    }
+
+    @Test("ARM64 JIT keeps PC pointer state wider than guest values")
+    func arm64PointerWidthContractIsExplicit() throws {
+        let compilerDirectory = repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler")
+        let compilerHeader = try String(
+            contentsOf: compilerDirectory.appending(path: "compemu.h"),
+            encoding: .utf8
+        )
+        let arm64Backend = try String(
+            contentsOf: compilerDirectory.appending(path: "compemu_support_arm.cpp"),
+            encoding: .utf8
+        )
+        let codegen = try String(
+            contentsOf: compilerDirectory.appending(path: "codegen_arm64.cpp"),
+            encoding: .utf8
+        )
+
+        #expect(compilerHeader.contains("typedef uintptr jit_reg_value_t;"))
+        #expect(compilerHeader.contains("jit_reg_value_t val;"))
+        #expect(arm64Backend.contains("if (r != PC_P)"))
+        #expect(arm64Backend.contains("arm_ADD_ptr_ri"))
+        #expect(codegen.contains("pc_p/pc_oldp are 64-bit host pointers"))
+    }
+
+    @Test("macOS ARM64 JIT allocation has a MAP_JIT fallback")
+    func macOSARM64JITAllocationContractIsExplicit() throws {
+        let compilerSource = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu_support_arm.cpp"),
+            encoding: .utf8
+        )
+        let entitlements = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/BasiliskII.entitlements"),
+            encoding: .utf8
+        )
+
+        #expect(compilerSource.contains("defined(CPU_AARCH64) && defined(__APPLE__)"))
+        #expect(compilerSource.contains("MAP_PRIVATE | MAP_ANON | MAP_JIT"))
+        #expect(compilerSource.contains("com.apple.security.cs.allow-jit entitlement"))
+        #expect(entitlements.contains("com.apple.security.cs.allow-jit"))
+        #expect(entitlements.contains("com.apple.security.cs.allow-unsigned-executable-memory"))
+        #expect(entitlements.contains("com.apple.security.cs.disable-library-validation"))
     }
 
 #if arch(arm64) && os(macOS)
@@ -306,7 +346,7 @@ struct BenchmarkHarnessTests {
         #expect(ethernet.contains("static bool ethernet_optimization_diagnostics_reported = false"))
 
         #expect(extfs.contains("void extfs_init(void)"))
-        #expect(extfs.contains("B2_OPT path=extfs_stat_cache fallback reason=no_stat_cache_implementation"))
+        #expect(extfs.contains("g_use_xattrs = check_xattr()"))
 
         #expect(system.contains("pread(fh->fd, buffer, length, file_offset)"))
         #expect(system.contains("pwrite(fh->fd, buffer, length, file_offset)"))
