@@ -32,6 +32,16 @@
 # include <pthread.h>
 #endif
 
+#if defined(__APPLE__) && defined(__aarch64__)
+# include <errno.h>
+# include <stdint.h>
+# include <stdio.h>
+# include <string.h>
+# include <sys/mman.h>
+# include <unistd.h>
+# include <libkern/OSCacheControl.h>
+#endif
+
 #if REAL_ADDRESSING || DIRECT_ADDRESSING
 # include <sys/mman.h>
 #endif
@@ -74,6 +84,52 @@ const int SCRATCH_MEM_SIZE = 0x10000;	// Size of scratch memory area
 
 
 static char *bundle = NULL;		// If in an OS X application bundle, its path
+
+static int run_jit_selftest()
+{
+#if defined(__APPLE__) && defined(__aarch64__)
+#ifdef MAP_JIT
+	const size_t page_size = (size_t)getpagesize();
+	void *mapping = mmap(NULL, page_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+		MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
+	if (mapping == MAP_FAILED) {
+		fprintf(stderr, "JIT self-test: MAP_JIT allocation failed (%d: %s) - check com.apple.security.cs.allow-jit entitlement\n",
+			errno, strerror(errno));
+		return 1;
+	}
+
+	typedef uint32_t (*jit_function)();
+	const uint32_t first[] = { 0x52800540, 0xd65f03c0 }; // mov w0, #42; ret
+	const uint32_t second[] = { 0x52800560, 0xd65f03c0 }; // mov w0, #43; ret
+	auto write_code = [&](const uint32_t *instructions) {
+		pthread_jit_write_protect_np(0);
+		memcpy(mapping, instructions, sizeof(first));
+		sys_icache_invalidate(mapping, sizeof(first));
+		pthread_jit_write_protect_np(1);
+	};
+
+	write_code(first);
+	const uint32_t initial_result = ((jit_function)mapping)();
+	write_code(second);
+	const uint32_t patched_result = ((jit_function)mapping)();
+	munmap(mapping, page_size);
+
+	if (initial_result != 42 || patched_result != 43) {
+		fprintf(stderr, "JIT self-test: execution mismatch (initial=%u patched=%u)\n",
+			initial_result, patched_result);
+		return 1;
+	}
+	fprintf(stdout, "JIT self-test: MAP_JIT, write protection, patching, and execution passed\n");
+	return 0;
+#else
+	fprintf(stderr, "JIT self-test: MAP_JIT is not available\n");
+	return 2;
+#endif
+#else
+	fprintf(stderr, "JIT self-test: supported only on macOS ARM64\n");
+	return 2;
+#endif
+}
 
 
 // CPU and FPU type, addressing mode
@@ -204,7 +260,8 @@ static void usage(const char *prg_name)
 		"\nUnix options:\n"
 		"  --config FILE\n    read/write configuration from/to FILE\n"
 		"  --break ADDRESS\n    set ROM breakpoint\n"
-		"  --rominfo\n    dump ROM information\n", prg_name
+		"  --rominfo\n    dump ROM information\n"
+		"  --jit-selftest\n    validate macOS ARM64 JIT allocation and patching\n", prg_name
 	);
 	LoadPrefs(NULL); // read the prefs file so PrefsPrintUsage() will print the correct default values
 	PrefsPrintUsage();
@@ -214,6 +271,7 @@ static void usage(const char *prg_name)
 int main(int argc, char **argv)
 {
 	const char *vmdir = NULL;
+	bool jit_selftest = false;
 	char str[256];
 
 	// Initialize variables
@@ -228,7 +286,10 @@ int main(int argc, char **argv)
 
 	// Parse command line arguments
 	for (int i=1; i<argc; i++) {
-		if (strcmp(argv[i], "--help") == 0) {
+		if (strcmp(argv[i], "--jit-selftest") == 0) {
+			argv[i] = NULL;
+			jit_selftest = true;
+		} else if (strcmp(argv[i], "--help") == 0) {
 			usage(argv[0]);
 		} else if (strncmp(argv[i], "-psn_", 5) == 0) {// OS X process identifier
 			argv[i++] = NULL;
@@ -264,6 +325,9 @@ int main(int argc, char **argv)
 			argc -= k;
 		}
 	}
+
+	if (jit_selftest)
+		return run_jit_selftest();
 
 	// Read preferences
 	PrefsInit(vmdir, argc, argv);

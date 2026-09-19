@@ -281,6 +281,21 @@ struct BenchmarkHarnessTests {
         #expect(support.contains("AArch64 JIT/natmem may live above 4 GB"))
     }
 
+    @Test("macOS launcher exposes a guarded JIT self-test")
+    func macOSLauncherJITSelfTestIsGuarded() throws {
+        let launcher = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/main_macosx.mm"),
+            encoding: .utf8
+        )
+
+        #expect(launcher.contains("--jit-selftest"))
+        #expect(launcher.contains("MAP_PRIVATE | MAP_ANON | MAP_JIT"))
+        #expect(launcher.contains("pthread_jit_write_protect_np(0)"))
+        #expect(launcher.contains("pthread_jit_write_protect_np(1)"))
+        #expect(launcher.contains("initial_result != 42 || patched_result != 43"))
+        #expect(launcher.contains("return run_jit_selftest();"))
+    }
+
 #if arch(arm64) && os(macOS)
     @Test("macOS MAP_JIT page executes generated ARM64 instructions")
     func mapJITExecutesGeneratedARM64() throws {
