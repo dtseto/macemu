@@ -597,6 +597,7 @@
 					compemu_midfunc_arm64.cpp,
 					compemu_midfunc_arm64_2.cpp,
 					compemu_midfunc_x86.cpp,
+					compemu_support_arm.cpp,
 				);
 				EXECUTABLE_PREFIX = lib;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -641,6 +642,7 @@
 					compemu_midfunc_arm64.cpp,
 					compemu_midfunc_arm64_2.cpp,
 					compemu_midfunc_x86.cpp,
+					compemu_support_arm.cpp,
 				);
 				EXECUTABLE_PREFIX = lib;
 				GCC_PREPROCESSOR_DEFINITIONS = (
