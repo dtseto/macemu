@@ -605,6 +605,7 @@
 					"CPU_aarch64=1",
 					"CPU_AARCH64=1",
 					"AARCH64_ASSEMBLY=1",
+					"USE_JIT=1",
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
@@ -647,6 +648,7 @@
 					"CPU_aarch64=1",
 					"CPU_AARCH64=1",
 					"AARCH64_ASSEMBLY=1",
+					"USE_JIT=1",
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
