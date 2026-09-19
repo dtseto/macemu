@@ -129,6 +129,102 @@ static __inline__ void trace_write_log(const char *kind, uaecptr addr, uae_u32 v
 #endif /* EXCEPTIONS_VIA_LONGJMP */
 
 #if DIRECT_ADDRESSING
+/*
+ * Fast RAM mapping used by the interpreter.  These are host pointers and must
+ * remain pointer-sized on arm64; the guest address itself remains 32-bit.
+ */
+extern uae_u8 *fast_ram_base;
+extern uae_u32 fast_ram_size;
+
+static __inline__ bool fast_ram_contains(uaecptr addr, size_t size)
+{
+    return fast_ram_base != NULL && addr <= fast_ram_size &&
+        size <= (size_t)(fast_ram_size - addr);
+}
+
+static __inline__ uae_u32 slow_get_long(uaecptr addr)
+{
+    uae_u32 raw;
+    memcpy(&raw, (const uae_u8 *)MEMBaseDiff + addr, sizeof(raw));
+    return __builtin_bswap32(raw);
+}
+
+static __inline__ uae_u32 slow_get_word(uaecptr addr)
+{
+    uae_u16 raw;
+    memcpy(&raw, (const uae_u8 *)MEMBaseDiff + addr, sizeof(raw));
+    return __builtin_bswap16(raw);
+}
+
+static __inline__ void slow_put_long(uaecptr addr, uae_u32 value)
+{
+    const uae_u32 raw = __builtin_bswap32(value);
+    memcpy((uae_u8 *)MEMBaseDiff + addr, &raw, sizeof(raw));
+}
+
+static __inline__ void fast_put_word(uaecptr addr, uae_u32 value)
+{
+    if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u16)), 1)) {
+        const uae_u16 raw = __builtin_bswap16((uae_u16)value);
+        memcpy(fast_ram_base + addr, &raw, sizeof(raw));
+        return;
+    }
+    const uae_u16 raw = __builtin_bswap16((uae_u16)value);
+    memcpy((uae_u8 *)MEMBaseDiff + addr, &raw, sizeof(raw));
+}
+
+static __inline__ uae_u32 fast_get_long(uaecptr addr)
+{
+    if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u32)), 1)) {
+        uae_u32 raw;
+        memcpy(&raw, fast_ram_base + addr, sizeof(raw));
+        return __builtin_bswap32(raw);
+    }
+    return slow_get_long(addr);
+}
+
+static __inline__ uae_u32 fast_get_word(uaecptr addr)
+{
+    if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u16)), 1)) {
+        uae_u16 raw;
+        memcpy(&raw, fast_ram_base + addr, sizeof(raw));
+        return __builtin_bswap16(raw);
+    }
+    return slow_get_word(addr);
+}
+
+static __inline__ void fast_put_long(uaecptr addr, uae_u32 value)
+{
+    if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u32)), 1)) {
+        const uae_u32 raw = __builtin_bswap32(value);
+        memcpy(fast_ram_base + addr, &raw, sizeof(raw));
+        return;
+    }
+    slow_put_long(addr, value);
+}
+
+/* Opt-in startup check for the exact arm64 hazards this path must avoid. */
+static __inline__ void fast_memory_selftest(void)
+{
+    const char *enabled = getenv("B2_FAST_MEMORY_SELFTEST");
+    if (!enabled || !enabled[0] || strcmp(enabled, "0") == 0)
+        return;
+
+    uae_u8 *saved_base = fast_ram_base;
+    const uae_u32 saved_size = fast_ram_size;
+    uae_u8 storage[9] = { 0 };
+    fast_ram_base = storage + 1;
+    fast_ram_size = 8;
+    fast_put_long(1, 0x12345678u);
+    const bool ok = fast_get_long(1) == 0x12345678u &&
+        storage[2] == 0x12 && storage[3] == 0x34 &&
+        storage[4] == 0x56 && storage[5] == 0x78;
+    fast_ram_base = saved_base;
+    fast_ram_size = saved_size;
+    fprintf(stderr, "B2_FAST_MEMORY_SELFTEST %s (unaligned/big-endian)\\n",
+        ok ? "passed" : "FAILED");
+}
+
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
 	return (uae_u8 *)MEMBaseDiff + addr;
@@ -152,16 +248,14 @@ static __inline__ uae_u32 get_long(uaecptr addr)
 {
     if (is_low_nubus_open_bus_gap(addr))
         return 0xffffffffu;
-    uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
-    return do_get_mem_long(m);
+    return fast_get_long(addr);
 }
 #define phys_get_long get_long
 static __inline__ uae_u32 get_word(uaecptr addr)
 {
     if (is_low_nubus_open_bus_gap(addr))
         return 0xffffu;
-    uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
-    return do_get_mem_word(m);
+    return fast_get_word(addr);
 }
 #define phys_get_word get_word
 static __inline__ uae_u32 fake_50f_status_byte(uaecptr addr, bool *handled)
@@ -223,8 +317,7 @@ static __inline__ void put_long(uaecptr addr, uae_u32 l)
         trace_write_log("L", addr, l);
     if (is_low_nubus_open_bus_gap(addr) || addr == 0x5ffffffc)
         return;
-    uae_u32 * const m = (uae_u32 *)do_get_real_address(addr);
-    do_put_mem_long(m, l);
+    fast_put_long(addr, l);
     JIT_NOTIFY_GUEST_WRITE(addr, 4);
 }
 #define phys_put_long put_long
@@ -234,8 +327,7 @@ static __inline__ void put_word(uaecptr addr, uae_u32 w)
         trace_write_log("W", addr, w);
     if (is_low_nubus_open_bus_gap(addr))
         return;
-    uae_u16 * const m = (uae_u16 *)do_get_real_address(addr);
-    do_put_mem_word(m, w);
+    fast_put_word(addr, w);
     JIT_NOTIFY_GUEST_WRITE(addr, 2);
 }
 #define phys_put_word put_word

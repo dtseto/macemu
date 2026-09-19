@@ -72,6 +72,8 @@ uint8 *RAMBaseHost;			// RAM base (host address space)
 uint32 RAMSize;				// Size of RAM
 uint32 ROMBaseMac;			// ROM base (Mac address space)
 uint8 *ROMBaseHost;			// ROM base (host address space)
+uae_u8 *fast_ram_base = NULL;	// Direct interpreter RAM pointer (64-bit safe)
+uae_u32 fast_ram_size = 0;		// Direct interpreter RAM size
 uint32 ROMSize;				// Size of ROM
 
 #if !REAL_ADDRESSING
@@ -119,6 +121,11 @@ extern int quit_program;
 bool Init680x0(void)
 {
 	spcflags_lock = B2_create_mutex();
+	fast_ram_base = (uae_u8 *)RAMBaseHost;
+	fast_ram_size = (uae_u32)RAMSize;
+#if DIRECT_ADDRESSING
+	fast_memory_selftest();
+#endif
 #if REAL_ADDRESSING
 	// Mac address space = host address space
 	RAMBaseMac = (uintptr)RAMBaseHost;
