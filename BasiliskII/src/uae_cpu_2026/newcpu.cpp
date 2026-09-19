@@ -2782,6 +2782,20 @@ void m68k_do_execute (void)
 				threaded_targets[i] = &&interpreter_threaded_register_move;
 		}
 		threaded_targets_initialized = true;
+		const char *table_selftest = getenv("B2_INTERP_THREADED_TABLE_SELFTEST");
+		if (table_selftest && table_selftest[0] && strcmp(table_selftest, "0") != 0) {
+			unsigned mapped_count = 0;
+			for (unsigned i = 0; i < 65536; i++)
+				if (threaded_targets[i] != &&interpreter_threaded_fallback)
+					mapped_count++;
+			const bool table_ok = threaded_targets[0xffff] == &&interpreter_threaded_fallback &&
+				threaded_targets[0x4e71] == &&interpreter_threaded_nop &&
+				threaded_targets[0x7000] == &&interpreter_threaded_moveq &&
+				threaded_targets[0x70ff] == &&interpreter_threaded_moveq;
+			fprintf(stderr,
+				"B2_INTERP_THREADED_TABLE_SELFTEST %s mapped=%u fallback=%u\\n",
+				table_ok ? "passed" : "FAILED", mapped_count, 65536 - mapped_count);
+		}
 		fprintf(stderr, "B2_INTERP threaded prototype enabled (NOP/MOVEQ/EXT/register-MOVE island)\\n");
 		interpreter_threaded_ext_selftest();
 		interpreter_threaded_register_move_selftest();
