@@ -216,6 +216,8 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("B2_JIT_JIT_ROM"))
         #expect(source.contains("arm64_rom_block && !jit_native_rom_enabled()"))
         #expect(source.contains("ROMBaseMac"))
+        #expect(source.contains("bi->handler_to_use = (cpuop_func*)popall_execute_normal"))
+        #expect(source.contains("bi->direct_handler = bi->direct_pen"))
         #expect(source.contains("ROM/rtarea on the interpreter path"))
         #expect(source.contains("optlev = 0;"))
     }

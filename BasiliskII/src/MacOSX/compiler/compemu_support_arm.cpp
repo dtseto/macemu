@@ -7915,6 +7915,11 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
         int was_comp = 0;
         uae_u8 liveflags[MAXRUN + 1];
         bool trace_in_rom = isinrom((uintptr)pc_hist[0].location) != 0;
+        const uae_u32 block_guest_pc = (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff);
+#if defined(CPU_AARCH64)
+        const bool arm64_rom_block = trace_in_rom ||
+            (block_guest_pc >= ROMBaseMac && block_guest_pc < ROMBaseMac + ROMSize);
+#endif
         uintptr max_pcp = (uintptr)pc_hist[blocklen - 1].location;
         uintptr min_pcp = max_pcp;
         uae_u32 cl = cacheline(pc_hist[0].location);
@@ -7969,10 +7974,8 @@ void compile_block(cpu_history* pc_hist, int blocklen, int totcycles)
                 optlev = 0;
 			} else {
 				const int max_optlev = jit_max_optlev();
-				const uae_u32 blk_pc = (uae_u32)((uintptr)pc_hist[0].location - MEMBaseDiff);
 				/* Basilisk's guest ROM classification is based on ROMBaseMac;
 				   host-side isinrom() is not sufficient on this natmem layout. */
-				const bool arm64_rom_block = trace_in_rom || blk_pc >= ROMBaseMac;
 				if (arm64_rom_block && !jit_native_rom_enabled()) {
 					/* ARM64 safety policy: keep ROM/rtarea on the interpreter path
 					   until their early-boot control flow is validated. */
@@ -9128,6 +9131,21 @@ endblock_done:
 #else
         if (!was_comp || jit_force_nondirect_handler_env() || jit_force_nondirect_target_env((uintptr)bi->pc_p)) {
             set_dhtu(bi, bi->handler);
+        }
+#endif
+
+#if defined(CPU_AARCH64)
+        /* An optlev-0 ROM block still emits a tiny native wrapper around
+           exec_nostats().  Keep the safe-default ROM policy stronger than
+           that wrapper: publish the ordinary C interpreter handler so the
+           dispatcher never enters the generated ARM64 trampoline for ROM. */
+        if (arm64_rom_block && !jit_native_rom_enabled()) {
+            bi->handler_to_use = (cpuop_func*)popall_execute_normal;
+            bi->handler = (cpuop_func*)popall_execute_normal;
+            bi->direct_handler = bi->direct_pen;
+            set_dhtu(bi, bi->direct_pen);
+            cache_tags[cacheline(pc_hist[0].location)].handler =
+                (cpuop_func*)popall_execute_normal;
         }
 #endif
 
