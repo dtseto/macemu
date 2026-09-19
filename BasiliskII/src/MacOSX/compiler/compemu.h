@@ -43,6 +43,16 @@ typedef uae_u32 uintptr;
 #endif
 #endif
 
+/* JIT constant-propagation values follow the width of the virtual value they
+   represent. On AArch64 PC_P is a host pointer; all other virtual integer
+   registers remain 32-bit M68k values. Keep the narrow type on every other
+   backend so this change cannot alter their register allocator semantics. */
+#if defined(CPU_AARCH64) || defined(CPU_aarch64)
+typedef uintptr jit_reg_value_t;
+#else
+typedef uae_u32 jit_reg_value_t;
+#endif
+
 #ifndef USE_JIT
 #define USE_JIT 0
 #endif
@@ -276,7 +286,7 @@ extern void* pushall_call_handler;
 
 typedef struct {
   uae_u32* mem;
-  uae_u32 val;
+  jit_reg_value_t val;
   uae_u8 is_swapped;
   uae_u8 status;
   uae_s8 realreg; /* gb-- realreg can hold -1 */

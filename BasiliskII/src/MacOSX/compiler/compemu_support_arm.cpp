@@ -81,6 +81,8 @@ extern "C" void jit_op_bfins(void);
 // Needed for sys_cache_invalidate on the JIT space region, Mac OS X specific
 #include <libkern/OSCacheControl.h>
 #include <pthread.h>
+#include <errno.h>
+#include <string.h>
 
 /* The 2026 CPU tree does not provide the UAE VM helpers used by the
  * reference backend.  MAP_JIT allocations on macOS require this paired
@@ -6446,7 +6448,25 @@ static uint8 *do_alloc_code(uint32 size, int depth)
 		jit_log("JIT lifecycle probe: rejecting executable allocation of %u bytes", size);
 		return NULL;
 	}
-#if defined(CPU_AARCH64) && defined(__linux__)
+#if defined(CPU_AARCH64) && defined(__APPLE__)
+	/* Every fallback allocation must remain a MAP_JIT allocation.  The
+	   write-protect API is per-thread and only applies to mappings created with
+	   MAP_JIT; silently falling back to vm_acquire() leaves Apple Silicon with
+	   an executable mapping that cannot be patched safely. */
+#ifdef MAP_JIT
+	void *code = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+		MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
+	if (code == MAP_FAILED) {
+		jit_log("macOS ARM64 MAP_JIT allocation failed (%d: %s) - check com.apple.security.cs.allow-jit entitlement",
+			errno, strerror(errno));
+		return NULL;
+	}
+	return (uint8 *)code;
+#else
+	jit_log("macOS ARM64 JIT unavailable: MAP_JIT is not defined");
+	return NULL;
+#endif
+#elif defined(CPU_AARCH64) && defined(__linux__)
 	/* AArch64 code pointers are 64-bit clean and helper calls use BLR.
 	   Do not allocate JIT code through the low-4GB scanner: in direct-addressing
 	   builds, low host addresses alias the emulated Mac address space
