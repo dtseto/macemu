@@ -449,8 +449,16 @@ static void build_comp(void);
 
 static inline void *vm_acquire(size_t size, int options = VM_MAP_DEFAULT)
 {
+#if defined(CPU_aarch64) || defined(CPU_AARCH64)
+	/* AArch64 JIT/natmem may live above 4 GB.  Passing UAE_VM_32BIT here
+	   creates futile low-address probes and reintroduces pointer truncation
+	   pressure in the ARM64 path. */
+	assert(options == VM_MAP_DEFAULT);
+	return uae_vm_alloc(size, 0, UAE_VM_READ_WRITE);
+#else
 	assert(options == (VM_MAP_DEFAULT | VM_MAP_32BIT));
 	return uae_vm_alloc(size, UAE_VM_32BIT, UAE_VM_READ_WRITE);
+#endif
 }
 
 #define UNUSED(x)

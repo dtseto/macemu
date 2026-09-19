@@ -874,8 +874,11 @@ void comp_fbcc_opp(uae_u32 opcode)
 #endif
 	int cc;
 
-	// comp_pc_p is expected to be bound to 32-bit addresses
+	/* AArch64 keeps comp_pc_p as a native host pointer; other backends
+	   retain the historical low-address JIT contract. */
+#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)
 	assert((uintptr) comp_pc_p <= 0xffffffffUL);
+#endif
 
 	if (jit_disable.fbcc)
 	{

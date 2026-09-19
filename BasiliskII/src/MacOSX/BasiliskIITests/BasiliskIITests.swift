@@ -264,6 +264,23 @@ struct BenchmarkHarnessTests {
         #expect(entitlements.contains("com.apple.security.cs.disable-library-validation"))
     }
 
+    @Test("Active ARM64 JIT path does not require low host addresses")
+    func activeARM64JITPathIsHighAddressClean() throws {
+        let cpuDirectory = repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler")
+        let fpp = try String(
+            contentsOf: cpuDirectory.appending(path: "compemu_fpp.cpp"),
+            encoding: .utf8
+        )
+        let support = try String(
+            contentsOf: cpuDirectory.appending(path: "compemu_support.cpp"),
+            encoding: .utf8
+        )
+
+        #expect(fpp.contains("#if !defined(CPU_aarch64) && !defined(CPU_AARCH64)"))
+        #expect(support.contains("return uae_vm_alloc(size, 0, UAE_VM_READ_WRITE);"))
+        #expect(support.contains("AArch64 JIT/natmem may live above 4 GB"))
+    }
+
 #if arch(arm64) && os(macOS)
     @Test("macOS MAP_JIT page executes generated ARM64 instructions")
     func mapJITExecutesGeneratedARM64() throws {
