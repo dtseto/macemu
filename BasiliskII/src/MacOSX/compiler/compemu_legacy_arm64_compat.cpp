@@ -1000,10 +1000,9 @@ static inline void jit_dispatch_interpreter_opcode(uae_u32 opcode, const char *p
 	static long trace_remaining = -1;
 	if (trace_remaining < 0) {
 		const char *value = getenv("B2_JIT_DISPATCH_TRACE");
-		/* Keep a small startup trace enabled by default while the ARM64 JIT
-		   bootstrap is under validation. An explicit value, including zero,
-		   still overrides this diagnostic default. */
-		trace_remaining = (value && *value) ? strtol(value, NULL, 0) : 200;
+		/* Dispatch tracing is diagnostic-only and must be opt-in. An explicit
+		   value, including zero, controls the trace budget. */
+		trace_remaining = (value && *value) ? strtol(value, NULL, 0) : 0;
 	}
 
 	bool trace_call = false;

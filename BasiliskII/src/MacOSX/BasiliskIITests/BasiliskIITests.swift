@@ -319,6 +319,17 @@ struct BenchmarkHarnessTests {
         #expect(!config.contains("#define USE_JIT_FPU\n"))
     }
 
+    @Test("ARM64 JIT dispatch tracing is opt-in")
+    func arm64JITDispatchTracingIsOptIn() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu_legacy_arm64_compat.cpp"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("trace_remaining = (value && *value) ? strtol(value, NULL, 0) : 0;"))
+        #expect(!source.contains("? strtol(value, NULL, 0) : 200"))
+    }
+
 #if arch(arm64) && os(macOS)
     @Test("macOS MAP_JIT page executes generated ARM64 instructions")
     func mapJITExecutesGeneratedARM64() throws {
