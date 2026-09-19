@@ -2352,6 +2352,65 @@ struct interpreter_threaded_state_snapshot {
 static unsigned long long interpreter_threaded_dispatches = 0;
 static unsigned long long interpreter_threaded_fallbacks = 0;
 static unsigned long long interpreter_threaded_inline_counts[65536] = {};
+static unsigned long long interpreter_threaded_fallback_counts[65536] = {};
+
+enum interpreter_threaded_fallback_family {
+	interpreter_threaded_family_control_flow,
+	interpreter_threaded_family_move,
+	interpreter_threaded_family_compare,
+	interpreter_threaded_family_arithmetic_logic,
+	interpreter_threaded_family_test_clear_extend,
+	interpreter_threaded_family_stack_multiple,
+	interpreter_threaded_family_other,
+	interpreter_threaded_family_count
+};
+
+static unsigned long long interpreter_threaded_fallback_family_counts[
+	interpreter_threaded_family_count] = {};
+
+static const char *interpreter_threaded_fallback_family_name(
+	interpreter_threaded_fallback_family family)
+{
+	static const char *const names[interpreter_threaded_family_count] = {
+		"control_flow", "move", "compare", "arithmetic_logic",
+		"test_clear_extend", "stack_multiple", "other"
+	};
+	return names[family];
+}
+
+/* This is intentionally a coarse profiler classification, not an opcode
+   semantic decoder. It is used only when metrics are enabled. */
+static interpreter_threaded_fallback_family
+interpreter_threaded_classify_fallback(uae_u32 opcode)
+{
+	if ((opcode & 0xf000) == 0x6000 ||
+		(opcode & 0xf0f8) == 0x50c8 ||
+		(opcode & 0xfff0) == 0x4e70)
+		return interpreter_threaded_family_control_flow;
+	if ((opcode & 0xc000) == 0x0000 &&
+		((opcode & 0xf000) == 0x1000 ||
+		 (opcode & 0xf000) == 0x2000 ||
+		 (opcode & 0xf000) == 0x3000))
+		return interpreter_threaded_family_move;
+	if ((opcode & 0xf000) == 0xb000)
+		return interpreter_threaded_family_compare;
+	if ((opcode & 0xf000) == 0xc000 ||
+		(opcode & 0xf000) == 0xd000 ||
+		(opcode & 0xf000) == 0x9000)
+		return interpreter_threaded_family_arithmetic_logic;
+	if ((opcode & 0xffc0) == 0x4880 ||
+		(opcode & 0xffc0) == 0x48c0 ||
+		(opcode & 0xffc0) == 0x49c0 ||
+		(opcode & 0xffc0) == 0x4a00 ||
+		(opcode & 0xffc0) == 0x4200)
+		return interpreter_threaded_family_test_clear_extend;
+	if ((opcode & 0xfff8) == 0x4e50 ||
+		(opcode & 0xfff8) == 0x4e58 ||
+		(opcode & 0xfff8) == 0x48e0 ||
+		(opcode & 0xfff8) == 0x48c0)
+		return interpreter_threaded_family_stack_multiple;
+	return interpreter_threaded_family_other;
+}
 
 static bool interpreter_threaded_is_ext(uae_u32 opcode)
 {
@@ -2444,10 +2503,31 @@ static bool interpreter_threaded_metrics_enabled()
 				fprintf(stderr,
 					"B2_METRIC threaded.dispatches=%llu fallback=%llu inline=%llu fallback_percent=%.2f\n",
 					 total, fallback, inline_count, fallback_percent);
+				for (unsigned family = 0; family < interpreter_threaded_family_count; family++)
+					if (interpreter_threaded_fallback_family_counts[family])
+						fprintf(stderr, "B2_METRIC threaded.fallback_family_%s=%llu\n",
+							interpreter_threaded_fallback_family_name(
+								(interpreter_threaded_fallback_family)family),
+							interpreter_threaded_fallback_family_counts[family]);
 				for (unsigned opcode = 0; opcode < 65536; opcode++)
 					if (interpreter_threaded_inline_counts[opcode])
 						fprintf(stderr, "B2_METRIC threaded.opcode_%04x=%llu\n",
 							opcode, interpreter_threaded_inline_counts[opcode]);
+				for (unsigned rank = 0; rank < 100; rank++) {
+					unsigned best_opcode = 0;
+					unsigned long long best_count = 0;
+					for (unsigned opcode = 0; opcode < 65536; opcode++) {
+						if (interpreter_threaded_fallback_counts[opcode] > best_count) {
+							best_opcode = opcode;
+							best_count = interpreter_threaded_fallback_counts[opcode];
+						}
+					}
+					if (!best_count)
+						break;
+					fprintf(stderr, "B2_METRIC threaded.fallback_rank_%u opcode_%04x=%llu\n",
+						rank + 1, best_opcode, best_count);
+					interpreter_threaded_fallback_counts[best_opcode] = 0;
+				}
 			});
 		}
 	}
@@ -2851,8 +2931,12 @@ void m68k_do_execute (void)
 	goto interpreter_dispatch_complete;
 #if defined(__GNUC__) || defined(__clang__)
 interpreter_threaded_fallback:
-	if (threaded_metrics)
+	if (threaded_metrics) {
 		interpreter_threaded_fallbacks++;
+		interpreter_threaded_fallback_counts[opcode]++;
+		interpreter_threaded_fallback_family_counts[
+			interpreter_threaded_classify_fallback(opcode)]++;
+	}
 	cpufunctbl[opcode](opcode);
 	goto interpreter_dispatch_complete;
 interpreter_threaded_nop:
