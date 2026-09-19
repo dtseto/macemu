@@ -36,6 +36,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static uint64_t double_bits_glue(double value)
 {
@@ -312,15 +313,41 @@ static void dump_test_mem_ranges_glue()
 	}
 }
 
+static uint64_t benchmark_monotonic_ns_glue()
+{
+	struct timespec ts;
+	if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) != 0)
+		return 0;
+	return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+}
+
 static bool run_opcode_test_mode_glue()
 {
 	const char *hex = getenv("B2_TEST_HEX");
-	if (!(hex && *hex))
+	const char *benchmark_env = getenv("B2_BENCH_CPU");
+	const bool benchmark_mode = benchmark_env && *benchmark_env && strcmp(benchmark_env, "0") != 0;
+	if (!(hex && *hex) && !benchmark_mode)
 		return false;
 
 	uint16 words[1024];
 	size_t n_words = 0;
-	if (!parse_test_hex_words_glue(hex, words, lengthof(words), &n_words)) {
+	uint64_t benchmark_iterations = 0;
+	if (benchmark_mode) {
+		const char *iterations_env = getenv("B2_BENCH_CPU_ITERATIONS");
+		benchmark_iterations = iterations_env && *iterations_env ? strtoull(iterations_env, NULL, 0) : 100000000ULL;
+		if (benchmark_iterations == 0 || benchmark_iterations > 0xffffffffULL) {
+			fprintf(stderr, "B2_BENCH_CPU_ITERATIONS must be in 1..0xffffffff\n");
+			quit_program = 1;
+			return true;
+		}
+		/* MOVE.L #iterations,D0; SUBQ.L #1,D0; BNE.S subq; EXEC_RETURN. */
+		words[0] = 0x203c;
+		words[1] = (uint16)(benchmark_iterations >> 16);
+		words[2] = (uint16)benchmark_iterations;
+		words[3] = 0x5380;
+		words[4] = 0x66fc;
+		n_words = 5;
+	} else if (!parse_test_hex_words_glue(hex, words, lengthof(words), &n_words)) {
 		fprintf(stderr, "B2_TEST_HEX parse failed\n");
 		quit_program = 1;
 		return true;
@@ -349,7 +376,7 @@ static bool run_opcode_test_mode_glue()
 	MakeFromSR(); /* ensure regflags matches regs.sr */
 
 	const char *init = getenv("B2_TEST_INIT");
-	if (init && *init) {
+	if (!benchmark_mode && init && *init) {
 		uint32 init_words[17]; /* D0-D7, A0-A7, optional SR */
 		size_t init_count = 0;
 		if (!parse_test_hex_longs_glue(init, init_words, lengthof(init_words), &init_count) ||
@@ -374,11 +401,31 @@ static bool run_opcode_test_mode_glue()
 	fill_prefetch_0();
 	quit_program = 0;
 #if USE_JIT
+	if (benchmark_mode)
+		UseJIT = false;
+#endif
+	const uint64_t benchmark_start_ns = benchmark_mode ? benchmark_monotonic_ns_glue() : 0;
+#if USE_JIT
 	if (UseJIT)
 		m68k_compile_execute();
 	else
 #endif
 		m68k_execute();
+	if (benchmark_mode) {
+		const uint64_t elapsed_ns = benchmark_monotonic_ns_glue() - benchmark_start_ns;
+		const uint64_t expected_instructions = 2 + benchmark_iterations * 2;
+		const bool state_ok = m68k_dreg(regs, 0) == 0;
+		const double ns_per_instruction = expected_instructions != 0 ?
+			(double)elapsed_ns / (double)expected_instructions : 0.0;
+		fprintf(stderr,
+			"B2_BENCH_CPU status=%s iterations=%llu instructions=%llu elapsed_ns=%llu ns_per_instruction=%.3f d0=%08x jit=0\n",
+			state_ok ? "passed" : "FAILED",
+			(unsigned long long)benchmark_iterations,
+			(unsigned long long)expected_instructions,
+			(unsigned long long)elapsed_ns,
+			ns_per_instruction,
+			(unsigned)m68k_dreg(regs, 0));
+	}
 
 	const char *two_pass = getenv("B2_TEST_TWO_PASS");
 	if (two_pass && *two_pass && two_pass[0] != '0') {
