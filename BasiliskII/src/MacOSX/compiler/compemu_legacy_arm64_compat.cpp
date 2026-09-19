@@ -1182,9 +1182,33 @@ static inline bool jit_interpop_assert_target(uae_u32 *target)
 #endif
 }
 
+/* The first ARM64 execute_normal() call can spend a long time tracing or
+   compiling guest startup code.  Keep the diagnostic completely opt-in and
+   bounded so it cannot perturb normal execution or flood the console. */
+static void jit_bootstrap_trace(const char *phase, uae_u32 pc, uae_u32 opcode,
+	int blocklen, const void *pc_p)
+{
+	static long remaining = -1;
+	if (remaining < 0) {
+		const char *env = getenv("B2_JIT_BOOTSTRAP_TRACE");
+		remaining = (env && *env) ? strtol(env, NULL, 0) : 0;
+		if (remaining < 0)
+			remaining = 0;
+	}
+	if (remaining == 0)
+		return;
+	--remaining;
+	fprintf(stderr,
+		"JIT_BOOTSTRAP phase=%s pc=%08x pc_p=%p opcode=%04x blocklen=%d\n",
+		phase, (unsigned)pc, (const void *)pc_p, (unsigned)(opcode & 0xffff),
+		blocklen);
+	fflush(stderr);
+}
+
 void execute_normal(void)
 {
 #if defined(CPU_AARCH64)
+	jit_bootstrap_trace("entry", m68k_getpc(), 0, 0, regs.pc_p);
 	if (jit_diag_enabled()) {
 		jit_diag_execute_normal_calls++;
 		jit_diag_dispatch_count++;
@@ -1220,12 +1244,18 @@ void execute_normal(void)
 	if (!jit_strict_full_jit_env()) {
 		uae_u32 fast_pc = get_virtual_address((uae_u8*)regs.pc_p);
 		if (fast_pc < (uae_u32)ROMBaseMac && *((const uae_u16*)regs.pc_p) == 0) {
+			jit_bootstrap_trace("zero_ram_fallback", fast_pc, 0, 0, regs.pc_p);
 			exec_nostats_limited(MAXRUN);
 			return;
 		}
 	}
 #endif
-	if (!check_for_cache_miss()) {
+	const bool cache_miss = check_for_cache_miss();
+#if defined(CPU_AARCH64)
+	if (cache_miss)
+		jit_bootstrap_trace("cache_miss", m68k_getpc(), 0, 0, regs.pc_p);
+#endif
+	if (!cache_miss) {
 		cpu_history pc_hist[MAXRUN];
 #ifdef UAE
 		memset(pc_hist, 0, sizeof(pc_hist));
@@ -1390,6 +1420,9 @@ jit_pctrace_done:
 			cpu_history *hist = &pc_hist[blocklen++];
 			hist->location = (uae_u16 *)regs.pc_p;
 			uae_u32 opcode = GET_OPCODE;
+#if defined(CPU_AARCH64)
+			jit_bootstrap_trace("opcode", m68k_getpc(), opcode, blocklen, regs.pc_p);
+#endif
 			/* GET_OPCODE is host-table ordered under direct addressing. Retain
 			   both the logical opcode and the complete maximum architectural
 			   encoding window; later instructions in this same trace may rewrite

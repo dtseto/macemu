@@ -179,6 +179,20 @@ struct BenchmarkHarnessTests {
         #expect(source.contains("jit_watchdog_arm(false)"))
     }
 
+    @Test("ARM64 JIT bootstrap tracing is bounded and opt-in")
+    func arm64JITBootstrapTracingIsBoundedAndOptIn() throws {
+        let source = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/compiler/compemu_legacy_arm64_compat.cpp"),
+            encoding: .utf8
+        )
+        #expect(source.contains("B2_JIT_BOOTSTRAP_TRACE"))
+        #expect(source.contains("JIT_BOOTSTRAP phase=%s pc=%08x pc_p=%p"))
+        #expect(source.contains("remaining = (env && *env) ? strtol(env, NULL, 0) : 0"))
+        #expect(source.contains("if (remaining == 0)"))
+        #expect(source.contains("zero_ram_fallback"))
+        #expect(source.contains("cache_miss"))
+    }
+
     @Test("Audio shutdown releases callback before closing SDL")
     func audioShutdownOrdering() throws {
         let source = try String(contentsOf: repositoryRoot.appending(path: "BasiliskII/src/SDL/audio_sdl.cpp"), encoding: .utf8)
