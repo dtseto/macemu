@@ -1568,6 +1568,23 @@ if [[ "x$HAVE_GCC27" = "xyes" -a "x$HAVE_I386" = "xyes" ]]; then
   CXXFLAGS="$CXXFLAGS -fomit-frame-pointer -fno-exceptions"
 fi
 
+dnl ARM targets benefit from explicit baseline tuning.  Keep these flags
+dnl architecture-level rather than CPU-specific so binaries remain portable
+dnl across ARMv7 and ARMv8 machines.  The macOS Xcode target sets its own
+dnl arm64 architecture and does not consume this autoconf path.
+if [[ "x$HAVE_GCC27" = "xyes" ]]; then
+  case "$target_cpu" in
+  aarch64)
+    CFLAGS="$CFLAGS -O3 -march=armv8-a"
+    CXXFLAGS="$CXXFLAGS -O3 -march=armv8-a"
+    ;;
+  arm*)
+    CFLAGS="$CFLAGS -O3 -march=armv7-a -mfpu=neon-vfpv4"
+    CXXFLAGS="$CXXFLAGS -O3 -march=armv7-a -mfpu=neon-vfpv4"
+    ;;
+  esac
+fi
+
 dnl (gb) Do not merge constants since it breaks fpu/fpu_x86.cpp.
 dnl As of 2001/08/02, this affects the following compilers:
 dnl Official: probably gcc-3.1 (mainline CVS)

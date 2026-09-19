@@ -22,8 +22,8 @@ Already present in `macosnewgoto`:
 Still missing or incomplete:
 
 - The full interpreter still executes one function-pointer handler per opcode in the normal path.
-- ARM/AArch64 byte swapping is not optimized in `BasiliskII/src/Unix/sysdeps.h`; the generic shift/byte fallback remains.
-- `configure.ac` does not add the requested ARM/AArch64 optimization defines or ARM `-march/-mtune` settings. The macOS Xcode target has AArch64 defines, but no equivalent architecture tuning or LTO configuration.
+- ARM/AArch64 byte swapping is now optimized in `BasiliskII/src/Unix/sysdeps.h`; target-generated code emits `rev`/`rev16`.
+- `configure.ac` now adds conservative ARM baseline `-O3`/`-march` settings. CPU-specific `-mtune` and macOS-specific tuning remain intentionally unset; the macOS Xcode target has AArch64 defines but no LTO configuration.
 - The SDL2 audio implementation still blocks on a semaphore and uses the old mixing buffer. SDL3 uses an SDL audio stream, but it is not the documented lock-free 2048-frame ring-buffer implementation.
 - No VNC server/async VNC conversion implementation exists in this repository path.
 - Disk read-ahead/LRU caching, network polling/batching, and several timer/display architecture changes remain undone.
@@ -56,8 +56,8 @@ Still missing or incomplete:
 
 | ID | Status | Finding |
 |---|---|---|
-| B.1 | **Partial** | Xcode Release configurations use `GCC_OPTIMIZATION_LEVEL = 3` (`BasiliskII.xcodeproj/project.pbxproj:1049,1159,1302`), but the ARM-specific autoconf recommendation is not present and some Debug configurations remain unoptimized. |
-| B.2 | **Missing** | No `-march`/`-mtune` settings were found in the macOS Xcode project or `BasiliskII/src/Unix/configure.ac`. |
+| B.1 | **Present/partial** | Xcode Release configurations use `GCC_OPTIMIZATION_LEVEL = 3` (`BasiliskII.xcodeproj/project.pbxproj:1049,1159,1302`), and `configure.ac` now adds `-O3` for ARM targets. Debug configurations remain unoptimized. |
+| B.2 | **Partial** | `configure.ac` now adds portable ARM baseline flags: AArch64 `-march=armv8-a`; ARMv7 `-march=armv7-a -mfpu=neon-vfpv4`. No CPU-specific `-mtune` is applied, and macOS relies on Xcode's arm64 target. |
 | B.3 | **Missing/intentional** | No LTO setting was found in the macOS Xcode target. Keep it disabled until the JIT gate/strict-marker behavior is tested; do not re-add blindly. |
 | B.4 | **Not applicable** | Debian hardening is outside this macOS Xcode target; no macOS equivalent change was found. |
 | B.5 | **Partial** | `-fno-exceptions` is only added for the old i386 autoconf branch (`configure.ac:1564-1570`); no global `-fno-rtti`/no-exceptions policy was found in the Xcode settings. |
@@ -67,8 +67,8 @@ Still missing or incomplete:
 
 | ID | Status | Finding |
 |---|---|---|
-| C.1 | **Missing** | `BasiliskII/src/Unix/sysdeps.h:439-455` still uses the generic shift/byte fallback for little-endian CPUs that are not declared unaligned-capable. No ARM `__builtin_bswap32/16` path was found there. |
-| C.2 | **Present for macOS AArch64, missing in generic configure** | `uae_cpu_2026/m68k.h:742-1705` contains the AArch64 optimized flag block, and `uae_cpu_2026.xcodeproj/project.pbxproj:605-607,647-649` defines AArch64 assembly flags. `configure.ac` still has no ARM/AArch64 branch equivalent. |
+| C.1 | **Present** | `BasiliskII/src/Unix/sysdeps.h` now declares ARM/AArch64 unaligned scalar access and uses `__builtin_bswap32/16`; Clang verification emitted `ldr` + `rev` for ARM64 and ARMv7. |
+| C.2 | **Partial** | `uae_cpu_2026/m68k.h:742-1705` contains the AArch64 optimized flag block, and `uae_cpu_2026.xcodeproj/project.pbxproj:605-607,647-649` defines AArch64 assembly flags. `configure.ac` now has ARM tuning but still lacks the generic ARM/AArch64 assembly define branch. |
 | C.3 | **Present** | `uae_cpu_2026/spcflags.h:79-87` uses GCC atomic fetch-or/fetch-and with a fallback for other platforms. |
 | C.4 | **Partial** | Computed-goto generation and runtime gates exist, but the generated wrapper still calls the ordinary handler at each label, and the small prototype only fast-paths NOP/MOVEQ. It is opt-in and not a complete threaded interpreter. |
 | C.5 | **Missing** | `newcpu.cpp:2616` calls `cpu_check_ticks()` separately from the SPCFLAGS test. |
@@ -128,14 +128,15 @@ Do not start another implementation of these without first checking the existing
 3. NEON framebuffer comparison — already implemented in `BasiliskII/src/SDL/video_neon.h` and used by video paths.
 4. VOSF profitability policy and diagnostics — already implemented; only runtime validation/tuning remains.
 5. Monotonic/dual timing ownership — already implemented in timer/JIT support; remaining work is timer cleanup and display-loop unification.
-6. AArch64 flag assembly, atomic SPCFLAGS, STOP sleeping, and regular-file `pread/pwrite` — already implemented.
+6. ARM/AArch64 builtin byte swapping and portable ARM baseline tuning — implemented in `BasiliskII/src/Unix/sysdeps.h` and `BasiliskII/src/Unix/configure.ac`; do not redo it without profiling or adding missing configure defines.
+7. AArch64 flag assembly, atomic SPCFLAGS, STOP sleeping, and regular-file `pread/pwrite` — already implemented.
 
 ## Recommended next tranche
 
 Highest-value unfinished items, in order:
 
 1. Make the threaded interpreter real: generate handlers that share a dispatch loop/state rather than labels that call `cpufunctbl` and return; keep the current differential validation and fallback gates.
-2. Add the ARM/AArch64 byte-swap path and generic configure/build tuning, then verify the generated instructions on the target architecture.
+2. Extend the ARM build work only if measurements justify it: add missing configure assembly defines or platform-specific tuning, then verify generated instructions on the target architecture.
 3. Decide whether SDL3 should replace the SDL2 audio path for the target; if SDL2 remains supported, implement the ring buffer there separately.
 4. Add a disk read cache only after measuring the existing ExtFS/stat-cache hit rates; ExtFS directory caching is already done.
 5. Finish SDL3 present optimization: preserve dirty-rect texture updates and avoid full render/present work when there is no new frame.
