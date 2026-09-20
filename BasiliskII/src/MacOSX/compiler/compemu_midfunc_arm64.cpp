@@ -505,9 +505,12 @@ MIDFUNC(2,mov_l_rr,(W4 d, RR4 s))
 		return;
 	}
 #if defined(CPU_AARCH64)
-	/* Scratch vregs are the explicit transient pointer class used by
-	   get_n_addr/branch-target construction; preserve them with X moves. */
-	if (d == PC_P || s == PC_P || d >= S1 || s >= S1) {
+	/* Scratch vregs are shared by 32-bit guest temporaries and explicit
+	   pointer temporaries.  Their numeric vreg class is not a type tag:
+	   generated instructions such as MVMLE use S2 for guest data.  Only
+	   PC_P is intrinsically the persistent 64-bit host-pointer vreg here;
+	   pointer-specific callers use mov_ptr_* explicitly. */
+	if (d == PC_P || s == PC_P) {
 		if (isconst(s)) {
 			COMPCALL(mov_ptr_ri)(d, live.state[s].val);
 			return;

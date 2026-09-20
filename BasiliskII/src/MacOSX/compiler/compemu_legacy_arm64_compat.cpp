@@ -498,12 +498,12 @@ void cmov_l_rr(RW4 d, RR4 s, uae_s32 cc)
 	FIX_INVERTED_CARRY
 	const int dst_vreg = d;
 	const bool s_is_const = isconst(s);
-	/* PC_P and the allocator's scratch vregs are the explicit native-pointer
-	   class used by the ARM64 generator for transient translated addresses.
-	   Never materialize those values with a W move.  A guest vreg cannot be
-	   the destination of a pointer conditional move. */
-	const bool d_is_ptr = dst_vreg == PC_P || dst_vreg >= S1;
-	const bool s_is_ptr = s == PC_P || s >= S1;
+	/* Scratch registers are dual-use.  In generated branch code a scratch
+	   destination can become a host pointer before the conditional move,
+	   as in cmov_l_rr(S1, PC_P, ...).  PC_P is the reliable type witness
+	   for this helper; never infer pointer width from S1..S12 alone. */
+	const bool d_is_ptr = dst_vreg == PC_P || s == PC_P;
+	const bool s_is_ptr = s == PC_P || dst_vreg == PC_P;
 	if (s_is_ptr && !d_is_ptr)
 		jit_abort("cmov_l_rr would store a pointer in a guest vreg");
 	d = rmw(dst_vreg);
