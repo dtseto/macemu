@@ -258,6 +258,9 @@ void m68k_do_compile_execute(void)
 				cpuop_func *handler = cache_tags[cl].handler;
 				blockinfo *bi = cache_tags[cl + 1].bi;
 				static int allow_unsafe_native_dispatch = -1;
+				static int native_pc_filter_enabled = -1;
+				static uae_u32 native_pc_filters[8];
+				static unsigned native_pc_filter_count = 0;
 				if (allow_unsafe_native_dispatch < 0) {
 					/* Match the x86 boot contract conservatively: keep ARM64 native
 					   dispatch opt-in until block-return and timer handoff behavior is
@@ -269,6 +272,32 @@ void m68k_do_compile_execute(void)
 								"JIT_DIAG native_dispatch=%s (B2_JIT_UNSAFE_NATIVE_DISPATCH=1 enables experimental native dispatch)\n",
 								allow_unsafe_native_dispatch ? "enabled" : "disabled");
 				}
+				if (native_pc_filter_enabled < 0) {
+					const char *filter = getenv("B2_JIT_NATIVE_GUEST_PC");
+					native_pc_filter_enabled = filter && *filter ? 1 : 0;
+					while (native_pc_filter_enabled && *filter &&
+						native_pc_filter_count < 8) {
+						char *end = NULL;
+						const unsigned long value = strtoul(filter, &end, 0);
+						if (end == filter)
+							break;
+						native_pc_filters[native_pc_filter_count++] =
+							(uae_u32)value;
+						filter = end;
+						while (*filter == ',' || *filter == ' ' || *filter == '\t')
+							++filter;
+					}
+					if (jit_diag_enabled())
+						fprintf(stderr, "JIT_DIAG native_pc_filter=%s count=%u\n",
+							native_pc_filter_enabled ? "enabled" : "disabled",
+							native_pc_filter_count);
+				}
+				bool native_pc_allowed = !native_pc_filter_enabled;
+				for (unsigned i = 0; i < native_pc_filter_count; ++i)
+					if ((uae_u32)m68k_getpc() == native_pc_filters[i])
+						native_pc_allowed = true;
+				const bool native_allowed_for_pc =
+					allow_unsafe_native_dispatch && native_pc_allowed;
 				if (jit_diag_enabled()) {
 					static unsigned long dispatch_count = 0;
 					dispatch_count++;
@@ -302,12 +331,12 @@ void m68k_do_compile_execute(void)
 						(cached_bi->status == BI_ACTIVE ||
 						 (cached_bi->status == BI_NEED_CHECK &&
 						  block_check_checksum(cached_bi)));
-					if (!allow_unsafe_native_dispatch && cached_block_ready &&
+					if (!native_allowed_for_pc && cached_block_ready &&
 						!jit_strict_full_jit_env()) {
 						jit_dispatch_trace("safe_cached_block", m68k_getpc(), regs.pc_p, cl,
 							 (uintptr)cached_bi->handler_to_use, cached_bi, false);
 						exec_nostats_limited(MAXRUN);
-					} else if (!allow_unsafe_native_dispatch || !bi ||
+					} else if (!native_allowed_for_pc || !bi ||
 						handler == popall_execute_normal) {
 					jit_dispatch_trace("safe_c_dispatch", m68k_getpc(), regs.pc_p, cl,
 						 (uintptr)handler, bi, allow_unsafe_native_dispatch);
@@ -320,20 +349,51 @@ void m68k_do_compile_execute(void)
 								"JIT_DIAG safe_c_dispatch count=%lu pc=%08x cl=%u handler=%p bi=%p native_allowed=%d\n",
 								safe_dispatch_count, (unsigned)m68k_getpc(), cl,
 								(void*)handler, (void*)bi,
-								allow_unsafe_native_dispatch);
+								native_allowed_for_pc);
 							fflush(stderr);
 						}
 					}
 					execute_normal();
 				} else {
 					jit_dispatch_trace("native_dispatch", m68k_getpc(), regs.pc_p, cl,
-						 (uintptr)handler, bi, allow_unsafe_native_dispatch);
+							 (uintptr)handler, bi, native_allowed_for_pc);
+					/* Native dispatch is still experimental.  Record the state at the
+					   hand-off and return boundary so a polling loop can be separated
+					   from a broken block return or a timer/interrupt hand-off. */
+					if (jit_diag_enabled()) {
+						extern int32 jit_countdown;
+						static unsigned long native_boundary_count = 0;
+						const unsigned long n = ++native_boundary_count;
+						if (n <= 64 || (n & (n - 1)) == 0) {
+							fprintf(stderr,
+								"JIT_DIAG native_enter n=%lu pc=%08x pc_p=%p handler=%p "
+								"countdown=%d spcflags=%08x interrupt_flags=%08x\n",
+								n, (unsigned)m68k_getpc(), (void *)regs.pc_p,
+								(void *)handler, (int)jit_countdown,
+								(unsigned)regs.spcflags, (unsigned)InterruptFlags);
+							fflush(stderr);
+						}
+					}
 					jit_prepare_native_execute();
 					jit_watchdog_arm(false);
 #endif
 					((compiled_handler)(pushall_call_handler))();
 #if defined(CPU_AARCH64)
 					jit_watchdog_disarm();
+					if (jit_diag_enabled()) {
+						extern int32 jit_countdown;
+						static unsigned long native_return_count = 0;
+						const unsigned long n = ++native_return_count;
+						if (n <= 64 || (n & (n - 1)) == 0) {
+							fprintf(stderr,
+								"JIT_DIAG native_return n=%lu pc=%08x pc_p=%p "
+								"countdown=%d spcflags=%08x interrupt_flags=%08x\n",
+								n, (unsigned)m68k_getpc(), (void *)regs.pc_p,
+								(int)jit_countdown, (unsigned)regs.spcflags,
+								(unsigned)InterruptFlags);
+							fflush(stderr);
+						}
+					}
 				}
 			}
 		if (use_sync_ticks && !use_retirement_ticks) {
