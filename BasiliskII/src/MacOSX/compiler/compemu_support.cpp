@@ -331,12 +331,14 @@ void m68k_do_compile_execute(void)
 						(cached_bi->status == BI_ACTIVE ||
 						 (cached_bi->status == BI_NEED_CHECK &&
 						  block_check_checksum(cached_bi)));
+					const bool native_block_ready = cached_block_ready &&
+						cached_bi->native_state == BI_NATIVE_SAFE;
 					if (!native_allowed_for_pc && cached_block_ready &&
 						!jit_strict_full_jit_env()) {
 						jit_dispatch_trace("safe_cached_block", m68k_getpc(), regs.pc_p, cl,
 							 (uintptr)cached_bi->handler_to_use, cached_bi, false);
 						exec_nostats_limited(MAXRUN);
-					} else if (!native_allowed_for_pc || !bi ||
+					} else if (!native_allowed_for_pc || !native_block_ready || !bi ||
 						handler == popall_execute_normal) {
 					jit_dispatch_trace("safe_c_dispatch", m68k_getpc(), regs.pc_p, cl,
 						 (uintptr)handler, bi, allow_unsafe_native_dispatch);
@@ -5290,6 +5292,11 @@ static void compile_block(cpu_history* pc_hist, int blocklen)
 		int r;
 		int was_comp=0;
 		uae_u8 liveflags[MAXRUN+1];
+#if defined(CPU_AARCH64)
+		/* ARM64 exception-sensitive blocks must not mix native code with
+		 * interpreter trap fallbacks until their PC/SR contract is proven. */
+		bool ram_trap_block = false;
+#endif
 #if USE_CHECKSUM_INFO
 		bool trace_in_rom = isinrom((uintptr)pc_hist[0].location) != 0;
 		uintptr max_pcp=(uintptr)pc_hist[blocklen - 1].location;
@@ -5367,6 +5374,12 @@ static void compile_block(cpu_history* pc_hist, int blocklen)
 			uae_u16* currpcp=pc_hist[i].location;
 			uae_u32 op=DO_GET_OPCODE(currpcp);
 
+#if defined(CPU_AARCH64)
+			if ((prop[op].cflow & fl_trap) &&
+				!isinrom((uintptr)currpcp))
+				ram_trap_block = true;
+#endif
+
 #if USE_CHECKSUM_INFO
 			trace_in_rom = trace_in_rom && isinrom((uintptr)currpcp);
 			if (follow_const_jumps && is_const_jump(op)) {
@@ -5407,6 +5420,17 @@ static void compile_block(cpu_history* pc_hist, int blocklen)
 #endif
 
 		bi->needed_flags=liveflags[0];
+
+#if defined(CPU_AARCH64)
+		if (ram_trap_block) {
+			/* A trap fallback must see the exact instruction PC and fully
+			 * materialized flags.  Keep this block on the existing interpreter
+			 * entry path while ARM64 native side-exit handling is validated. */
+			optlev = 0;
+			bi->optlevel = optlev;
+			bi->count = -1;
+		}
+#endif
 
 		align_target(align_loops);
 		was_comp=0;

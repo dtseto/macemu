@@ -1087,6 +1087,32 @@ void exec_nostats(void)
 	for (;;) {
 		uae_u32 before_pc = m68k_getpc();
 		uae_u32 opcode = GET_OPCODE;
+		/* Narrow, opt-in diagnostics for a suspected guest polling loop. */
+		static int watch_pc_init = -1;
+		static uae_u32 watch_pc = 0;
+		static unsigned long watch_hits = 0;
+		if (watch_pc_init < 0) {
+			const char *env = getenv("B2_JIT_WATCH_PC");
+			watch_pc = (env && *env) ? (uae_u32)strtoul(env, NULL, 0) : 0;
+			watch_pc_init = 1;
+			if (jit_diag_enabled())
+				fprintf(stderr, "JIT_DIAG watch_config env=%s pc=%08x\n",
+					env ? env : "<unset>", (unsigned)watch_pc);
+		}
+		const bool watch_this_pc = watch_pc && before_pc == watch_pc;
+#if defined(CPU_AARCH64)
+		extern int32 jit_countdown;
+#endif
+		const uae_u32 watch_before_spcflags = watch_this_pc ? regs.spcflags : 0;
+		const uae_u32 watch_before_interrupts = watch_this_pc ? InterruptFlags : 0;
+		const int32 watch_before_countdown = watch_this_pc ? jit_countdown : 0;
+		if (watch_this_pc &&
+			(++watch_hits <= 64 || (watch_hits & (watch_hits - 1)) == 0)) {
+			fprintf(stderr, "JIT_DIAG watch_before n=%lu pc=%08x op=%04x d0=%08x d1=%08x sr=%04x countdown=%d spcflags=%08x interrupt_flags=%08x\n",
+				watch_hits, before_pc, (unsigned)opcode, regs.regs[0], regs.regs[1],
+				(unsigned)regs.sr, (int)watch_before_countdown,
+				(unsigned)watch_before_spcflags, (unsigned)watch_before_interrupts);
+		}
 		jit_current_interp_pc = before_pc;
 		jit_current_interp_opcode = opcode;
 		bool trace_this = false;
@@ -1147,6 +1173,19 @@ void exec_nostats(void)
 			jit_trace_table_log("TRACEWINJTAB", trace_count, after_pc);
 		}
 		cpu_check_ticks();
+		/* Re-arm a pending interrupt when the guest has become unmasked before
+		   allowing this interpreter loop to continue. */
+		if (InterruptFlags && (regs.sr & 0x0700) == 0 &&
+			!(regs.spcflags & SPCFLAG_ALL))
+			SPCFLAGS_SET(SPCFLAG_INT);
+		if (watch_this_pc &&
+			(watch_hits <= 64 || (watch_hits & (watch_hits - 1)) == 0)) {
+			fprintf(stderr, "JIT_DIAG watch_after n=%lu pc=%08x next_pc=%08x d0=%08x d1=%08x sr=%04x countdown=%d spcflags=%08x interrupt_flags=%08x delta_countdown=%d\n",
+				watch_hits, before_pc, (unsigned)m68k_getpc(), regs.regs[0], regs.regs[1],
+				(unsigned)regs.sr, (int)jit_countdown, (unsigned)regs.spcflags,
+				(unsigned)InterruptFlags, (int)(jit_countdown - watch_before_countdown));
+			fflush(stderr);
+		}
 		if (end_block(opcode) || SPCFLAGS_TEST(SPCFLAG_ALL))
 			return;
 	}
@@ -1175,12 +1214,75 @@ static void exec_nostats_limited(int maxrun_limit)
 	for (;;) {
 		uae_u32 opcode = GET_OPCODE;
 		const uae_u32 pc = m68k_getpc();
+		/* Narrow, opt-in diagnostics for a suspected guest polling loop. */
+		static int watch_pc_init = -1;
+		static uae_u32 watch_pc = 0;
+		static unsigned long watch_hits = 0;
+		static uae_u32 watch_last_pc = 0;
+		static uae_u32 watch_last_opcode = 0;
+		static uae_u32 watch_last_sr = 0;
+		static bool watch_have_last = false;
+		static unsigned long sr_change_count = 0;
+		if (watch_pc_init < 0) {
+			const char *env = getenv("B2_JIT_WATCH_PC");
+			watch_pc = (env && *env) ? (uae_u32)strtoul(env, NULL, 0) : 0;
+			watch_pc_init = 1;
+		}
+		const bool watch_this_pc = watch_pc && pc == watch_pc;
+		const uae_u32 sr_before = regs.sr;
+		if (watch_this_pc && watch_have_last && watch_last_sr != regs.sr &&
+			(watch_hits < 64 || (watch_hits & (watch_hits - 1)) == 0)) {
+			fprintf(stderr, "JIT_DIAG watch_sr_entry pc=%08x sr=%04x previous_pc=%08x previous_op=%04x previous_sr=%04x\n",
+				(unsigned)pc, (unsigned)regs.sr, (unsigned)watch_last_pc,
+				(unsigned)watch_last_opcode, (unsigned)watch_last_sr);
+		}
+#if defined(CPU_AARCH64)
+		extern int32 jit_countdown;
+#endif
+		const uae_u32 watch_before_spcflags = watch_this_pc ? regs.spcflags : 0;
+		const uae_u32 watch_before_interrupts = watch_this_pc ? InterruptFlags : 0;
+		const int32 watch_before_countdown = watch_this_pc ? jit_countdown : 0;
+		if (watch_this_pc &&
+			(++watch_hits <= 64 || (watch_hits & (watch_hits - 1)) == 0)) {
+			fprintf(stderr, "JIT_DIAG watch_before n=%lu pc=%08x op=%04x d0=%08x d1=%08x sr=%04x countdown=%d spcflags=%08x interrupt_flags=%08x\n",
+				watch_hits, pc, (unsigned)opcode, regs.regs[0], regs.regs[1],
+				(unsigned)regs.sr, (int)watch_before_countdown,
+				(unsigned)watch_before_spcflags, (unsigned)watch_before_interrupts);
+		}
 		if (jit_guest_instruction_observer_enabled())
 			jit_guest_path_record_nostats(pc);
 		if (jit_trace_target_pc(pc))
 			jit_trace_pc_hit(pc, (2u << 16) | (opcode & 0xffff));
 		jit_dispatch_interpreter_opcode(opcode, "exec_nostats_limited");
 		cpu_check_ticks();
+		if (regs.sr != sr_before &&
+			(++sr_change_count <= 128 || (sr_change_count & (sr_change_count - 1)) == 0)) {
+			fprintf(stderr, "JIT_DIAG sr_change n=%lu pc=%08x op=%04x before=%04x after=%04x next_pc=%08x spcflags=%08x interrupts=%08x\n",
+				sr_change_count, (unsigned)pc, (unsigned)opcode,
+				(unsigned)sr_before, (unsigned)regs.sr,
+				(unsigned)m68k_getpc(), (unsigned)regs.spcflags,
+				(unsigned)InterruptFlags);
+			fflush(stderr);
+		}
+		/* An interrupt may become unmasked while its source flag is already
+		   pending.  Re-arm the safepoint before allowing this bounded
+		   interpreter run to continue, otherwise a polling loop can run
+		   forever with InterruptFlags set but no SPCFLAG_INT. */
+		if (InterruptFlags && (regs.sr & 0x0700) == 0 &&
+			!(regs.spcflags & SPCFLAG_ALL))
+			SPCFLAGS_SET(SPCFLAG_INT);
+		if (watch_this_pc &&
+			(watch_hits <= 64 || (watch_hits & (watch_hits - 1)) == 0)) {
+			fprintf(stderr, "JIT_DIAG watch_after n=%lu pc=%08x next_pc=%08x d0=%08x d1=%08x sr=%04x countdown=%d spcflags=%08x interrupt_flags=%08x delta_countdown=%d\n",
+				watch_hits, pc, (unsigned)m68k_getpc(), regs.regs[0], regs.regs[1],
+				(unsigned)regs.sr, (int)jit_countdown, (unsigned)regs.spcflags,
+				(unsigned)InterruptFlags, (int)(jit_countdown - watch_before_countdown));
+			fflush(stderr);
+		}
+		watch_last_pc = pc;
+		watch_last_opcode = opcode;
+		watch_last_sr = regs.sr;
+		watch_have_last = true;
 		if (end_block(opcode) || SPCFLAGS_TEST(SPCFLAG_ALL) || ++run_count >= maxrun_limit)
 			return;
 	}

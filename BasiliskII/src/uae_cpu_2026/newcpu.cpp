@@ -1793,6 +1793,20 @@ void REGPARAM2 op_illg (uae_u32 opcode)
 {
 
 	if ((opcode & 0xF000) == 0xA000) {
+		if (opcode == 0xA052 && getenv("B2_JIT_DIAG")) {
+			static unsigned long linea_trace_count = 0;
+			if (linea_trace_count < 64 ||
+				(linea_trace_count & (linea_trace_count - 1)) == 0) {
+				MakeSR();
+				fprintf(stderr,
+					"JIT_DIAG linea_before n=%lu pc=%08x sr=%04x intmask=%u spcflags=%08x interrupts=%08x d0=%08x a0=%08x a7=%08x\n",
+					++linea_trace_count, (unsigned)m68k_getpc(),
+					(unsigned)regs.sr, (unsigned)regs.intmask,
+					(unsigned)regs.spcflags, (unsigned)InterruptFlags,
+					(unsigned)regs.regs[0], (unsigned)regs.regs[8],
+					(unsigned)regs.regs[15]);
+			}
+		}
 #if 0
 		if (opcode == 0xa0ff)
 		{
@@ -1808,6 +1822,20 @@ void REGPARAM2 op_illg (uae_u32 opcode)
 		}
 #endif
 		Exception(0xA,0);
+		if (opcode == 0xA052 && getenv("B2_JIT_DIAG")) {
+			static unsigned long linea_after_count = 0;
+			if (linea_after_count < 64 ||
+				(linea_after_count & (linea_after_count - 1)) == 0) {
+				MakeSR();
+				fprintf(stderr,
+					"JIT_DIAG linea_after n=%lu pc=%08x sr=%04x intmask=%u spcflags=%08x interrupts=%08x d0=%08x a0=%08x a7=%08x\n",
+					++linea_after_count, (unsigned)m68k_getpc(),
+					(unsigned)regs.sr, (unsigned)regs.intmask,
+					(unsigned)regs.spcflags, (unsigned)InterruptFlags,
+					(unsigned)regs.regs[0], (unsigned)regs.regs[8],
+					(unsigned)regs.regs[15]);
+			}
+		}
 		return;
 	}
 

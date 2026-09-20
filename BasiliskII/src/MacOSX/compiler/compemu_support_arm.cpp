@@ -2996,6 +2996,9 @@ void invalidate_block(blockinfo* bi)
     int i;
 
     jit_trace_edge_snapshot("INVALIDATE", bi);
+#if defined(CPU_AARCH64)
+    bi->native_state = BI_NATIVE_UNSAFE;
+#endif
     bi->optlevel = 0;
     bi->count = optcount[0] - 1;
     bi->handler = NULL;
@@ -3043,6 +3046,9 @@ static inline void block_need_recompile(blockinfo* bi)
     uae_u32 cl = cacheline(bi->pc_p);
 
     jit_trace_edge_snapshot("RECOMP", bi);
+#if defined(CPU_AARCH64)
+    bi->native_state = BI_NATIVE_UNSAFE;
+#endif
     /* Disable the old native target before repatching inbound dependencies.
        set_dhtu() honours prefer_direct edges by selecting direct_handler when
        non-null; doing this assignment afterwards leaves those edges pointing
@@ -3322,6 +3328,7 @@ static inline blockinfo* alloc_blockinfo(void)
 {
     blockinfo* bi = BlockInfoAllocator.acquire();
     bi->csi = NULL;
+    bi->native_state = BI_NATIVE_UNSAFE;
     return bi;
 }
 
@@ -6161,6 +6168,7 @@ static uintptr get_handler_for_edge(const blockinfo *source_bi, int edge_slot, u
     const bool forced_validated = jit_force_nondirect_handler_env() ||
         jit_force_nondirect_target_env(addr);
     if (!forced_validated && bi->status == BI_ACTIVE &&
+        bi->native_state == BI_NATIVE_SAFE &&
         jit_source_edge_prefers_direct(source_bi, edge_slot, addr)) {
         uintptr h = (uintptr)(bi->direct_handler ? bi->direct_handler : bi->direct_handler_to_use);
         if (h)
@@ -6421,6 +6429,7 @@ void calc_disp_ea_020(int base, uae_u32 dp, int target)
 
 void set_cache_state(int enabled)
 {
+    const int requested_cache_state = enabled != 0;
     if (jit_diag_enabled()) {
         static unsigned long set_cache_state_calls = 0;
         set_cache_state_calls++;
@@ -6430,8 +6439,8 @@ void set_cache_state(int enabled)
             fflush(stderr);
         }
     }
-    guest_cache_enabled = enabled != 0;
-    if (jit_strict_full_jit_env() && compiled_code && !enabled) {
+    guest_cache_enabled = requested_cache_state;
+    if (jit_strict_full_jit_env() && compiled_code && !requested_cache_state) {
         /* CACR remains guest-visible in regs.cacr. Strict verification only
            decouples host translation availability from the guest cache-enable
            bit. Preserve exactly one ordinary invalidation boundary per enabled
@@ -6445,11 +6454,14 @@ void set_cache_state(int enabled)
         return;
     }
     strict_cache_disable_boundary_seen = false;
-    if (enabled != cache_enabled) {
+    /* CACR is a bitfield, but the translator only needs the cache-enabled
+       truth value. Store the normalized state so equivalent nonzero masks do
+       not look like transitions and flush the entire translation cache. */
+    if (requested_cache_state != (cache_enabled != 0)) {
         jit_diag_last_flush_site = "set_cache_state:toggle";
         flush_icache_hard(3);
     }
-    cache_enabled = enabled;
+    cache_enabled = requested_cache_state;
 }
 
 int get_cache_state(void)
@@ -6845,7 +6857,11 @@ static inline int block_check_checksum(blockinfo* bi)
         /* This block is still OK. So we reactivate. Of course, that
            means we have to move it into the needs-to-be-flushed list */
         bi->handler_to_use = bi->handler;
-        set_dhtu(bi, (jit_force_nondirect_handler_env() || jit_force_nondirect_target_env((uintptr)bi->pc_p)) ? bi->handler : bi->direct_handler);
+        const bool native_pending = bi->native_state == BI_NATIVE_CHECKSUM_PENDING;
+        set_dhtu_policy(bi,
+            (jit_force_nondirect_handler_env() || jit_force_nondirect_target_env((uintptr)bi->pc_p) || native_pending)
+                ? bi->handler : bi->direct_handler,
+            !native_pending);
         bi->status = BI_CHECKING; /* Strict lazy flush already gates every target's inbound edges. */
         isgood = jit_strict_full_jit_env() || called_check_checksum(bi) != 0;
     }
@@ -6856,6 +6872,14 @@ static inline int block_check_checksum(blockinfo* bi)
         add_to_active(bi);
         raise_in_cl_list(bi);
         bi->status = BI_ACTIVE;
+#if defined(CPU_AARCH64)
+        if (bi->native_state == BI_NATIVE_CHECKSUM_PENDING) {
+            bi->native_state = BI_NATIVE_SAFE;
+            if (!jit_force_nondirect_handler_env() &&
+                !jit_force_nondirect_target_env((uintptr)bi->pc_p))
+                set_dhtu(bi, bi->direct_handler);
+        }
+#endif
     } else {
         /* This block actually changed. We need to invalidate it,
            and set it up to be recompiled */
@@ -9220,6 +9244,27 @@ endblock_done:
                 }
             }
         }
+        /* Native entry is an explicit property of this compiled incarnation.
+           Mixed blocks, interpreter barriers, ROM blocks under the default
+           policy, and checksum-gated blocks must remain on the safe path. */
+        const bool native_candidate = was_comp &&
+            (!arm64_rom_block || jit_native_rom_enabled()) &&
+            bi->handler_to_use != (cpuop_func*)popall_execute_normal;
+        bi->native_state = native_candidate
+            ? (bi->status == BI_ACTIVE ? BI_NATIVE_SAFE : BI_NATIVE_CHECKSUM_PENDING)
+            : BI_NATIVE_UNSAFE;
+        if (jit_diag_enabled()) {
+            static unsigned long eligibility_count = 0;
+            const unsigned long n = ++eligibility_count;
+            if (n <= 200 || (n & (n - 1)) == 0) {
+                fprintf(stderr,
+                    "JIT_DIAG block_eligibility n=%lu pc=%08x state=%s was_comp=%d rom=%d status=%d\n",
+                    n, (unsigned)block_m68k_pc,
+                    bi->native_state == BI_NATIVE_SAFE ? "native-safe" : "interpreter-only",
+                    was_comp, arm64_rom_block ? 1 : 0, bi->status);
+                fflush(stderr);
+            }
+        }
 #endif
         jit_trace_edge_snapshot("BUILD", bi);
         if (redo_current_block)
@@ -9259,6 +9304,12 @@ endblock_done:
    historical locations. */
 static inline void flush_icache_architectural(int reason)
 {
+#if defined(CPU_AARCH64)
+    if (jit_diag_enabled())
+        jit_diag_last_flush_site = reason == 0
+            ? "flush_icache_architectural:guest"
+            : "flush_icache_architectural:other";
+#endif
     if (jit_strict_full_jit_env() || lazy_flush)
         flush_icache_lazy(reason);
     else

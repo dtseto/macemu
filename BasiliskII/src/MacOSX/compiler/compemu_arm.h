@@ -439,6 +439,8 @@ typedef struct blockinfo_t {
   uae_u8 optlevel;
   uae_u8 needed_flags;
   uae_u8 status;
+  /* Native entry is admitted per compiled incarnation, never by cache state alone. */
+  uae_u8 native_state;
 
   dependency  dep[2];  /* Holds things we depend on */
   dependency* deplist; /* List of things that depend on this */
@@ -459,6 +461,9 @@ typedef struct blockinfo_t {
 #define BI_CHECKING 4
 #define BI_COMPILING 5
 #define BI_FINALIZING 6
+#define BI_NATIVE_UNSAFE 0
+#define BI_NATIVE_SAFE 1
+#define BI_NATIVE_CHECKSUM_PENDING 2
 
 extern const int POPALLSPACE_SIZE;
 
