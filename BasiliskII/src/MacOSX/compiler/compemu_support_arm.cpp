@@ -2067,6 +2067,7 @@ static unsigned long jit_diag_cache_miss_calls = 0;
 static unsigned long jit_diag_recompile_block_calls = 0;
 static unsigned long jit_diag_check_checksum_calls = 0;
 static unsigned long jit_diag_flush_icache_hard_calls = 0;
+static unsigned long jit_diag_write_window_transitions = 0;
 static const char *jit_diag_last_flush_site = "?";
 static unsigned long jit_diag_dispatch_count = 0;          /* total helper/dispatcher entries */
 static unsigned long jit_diag_optlev0_blocks = 0;          /* blocks compiled at optlev 0 */
@@ -2249,7 +2250,9 @@ static void jit_diag_maybe_print(void)
     fprintf(stderr,
         "JIT_DIAG t=%lus dispatch=%lu exec_normal=%lu (cache_hit=%lu) compile=%lu (fresh=%lu recomp=%lu opt0=%lu opt>0=%lu) "
         "do_nothing=%lu exec_nostats=%lu cache_miss=%lu recompile_block=%lu check_checksum=%lu (good=%lu bad=%lu) flush_hard=%lu "
-        "avg_block=%.1f insn avg_code=%.1fB code_per_insn=%.2fB peak_cache=%.1fKB max_block=%lu insn/%lu cyc/%luB pc=0x%08x\n",
+        "avg_block=%.1f insn avg_code=%.1fB code_per_insn=%.2fB peak_cache=%.1fKB "
+        "cache_base=%p cache_end=%p cache_cur=%p cache_used=%uB cache_size=%uKB "
+        "flush_site=%s write_windows=%lu max_block=%lu insn/%lu cyc/%luB pc=0x%08x\n",
         elapsed, jit_diag_dispatch_count,
         jit_diag_execute_normal_calls, jit_diag_execute_normal_cache_hit,
         jit_diag_compile_block_calls, jit_diag_compile_block_fresh, jit_diag_compile_block_recomp,
@@ -2260,6 +2263,13 @@ static void jit_diag_maybe_print(void)
         jit_diag_flush_icache_hard_calls,
         avg_blocklen, avg_block_bytes, bytes_per_insn,
         (double)jit_diag_peak_cache_bytes / 1024.0,
+        (void *)compiled_code,
+        (void *)((uintptr)compiled_code + (uintptr)cache_size * 1024),
+        (void *)current_compile_p,
+        (unsigned)current_cache_size,
+        (unsigned)cache_size,
+        jit_diag_last_flush_site,
+        jit_diag_write_window_transitions,
         jit_diag_max_blocklen, jit_diag_max_block_cycles, jit_diag_max_block_bytes,
         (unsigned)m68k_getpc());
     fflush(stderr);
@@ -2724,6 +2734,15 @@ STATIC_INLINE void jit_begin_write_window(void)
 #if defined(__APPLE__) && defined(CPU_AARCH64)
 	if (jit_write_window_depth == 1) {
 		uae_vm_jit_write_protect(false);
+#if defined(CPU_AARCH64)
+			if (jit_diag_enabled()) {
+				jit_diag_write_window_transitions++;
+				if (jit_diag_write_window_transitions <= 32 ||
+					(jit_diag_write_window_transitions & (jit_diag_write_window_transitions - 1)) == 0)
+					fprintf(stderr, "JIT_DIAG MAP_JIT write_protect=0 transition=%lu\n",
+						jit_diag_write_window_transitions);
+			}
+#endif
 	}
 #endif
 }
@@ -2739,6 +2758,15 @@ STATIC_INLINE void jit_end_write_window(void)
 #if defined(__APPLE__) && defined(CPU_AARCH64)
 	if (jit_write_window_depth == 0) {
 		uae_vm_jit_write_protect(true);
+#if defined(CPU_AARCH64)
+			if (jit_diag_enabled()) {
+				jit_diag_write_window_transitions++;
+				if (jit_diag_write_window_transitions <= 32 ||
+					(jit_diag_write_window_transitions & (jit_diag_write_window_transitions - 1)) == 0)
+					fprintf(stderr, "JIT_DIAG MAP_JIT write_protect=1 transition=%lu\n",
+						jit_diag_write_window_transitions);
+			}
+#endif
 	}
 #endif
 }
@@ -6720,13 +6748,15 @@ int check_for_cache_miss(void)
     if (bi) {
         int cl = cacheline(regs.pc_p);
         if (bi != cache_tags[cl + 1].bi) {
+            /* A collision is a valid cached block, but not the bucket head. */
             raise_in_cl_list(bi);
-#if defined(CPU_AARCH64)
-            if (jit_diag_enabled())
-                jit_diag_execute_normal_cache_hit++;
-#endif
             return 1;
         }
+#if defined(CPU_AARCH64)
+        if (jit_diag_enabled())
+            jit_diag_execute_normal_cache_hit++;
+#endif
+        return 0;
     }
     return 0;
 }

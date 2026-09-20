@@ -1160,6 +1160,13 @@ uae_u32 jit_current_interp_opcode = 0;
 
 static void exec_nostats_limited(int maxrun_limit)
 {
+#if defined(CPU_AARCH64)
+	if (jit_diag_enabled()) {
+		jit_diag_exec_nostats_calls++;
+		jit_diag_dispatch_count++;
+		jit_diag_maybe_print();
+	}
+#endif
 	if (jit_strict_full_jit_env())
 		jit_abort("strict full-JIT: exec_nostats_limited runtime entry pc=%08x", m68k_getpc());
 	int run_count = 0;

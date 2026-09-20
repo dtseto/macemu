@@ -188,6 +188,12 @@ static void jit_dispatch_trace(const char *phase, uae_u32 pc, const void *pc_p,
 }
 #endif
 
+#if defined(CPU_AARCH64)
+static inline blockinfo* get_blockinfo_addr(void* addr);
+static inline int block_check_checksum(blockinfo* bi);
+static void exec_nostats_limited(int maxrun_limit);
+#endif
+
 void m68k_do_compile_execute(void)
 {
 	if (!ensure_aarch64_jit_runtime_ready()) {
@@ -277,8 +283,32 @@ void m68k_do_compile_execute(void)
 				/* A cache miss has no native register/stack contract to preserve.
 				   Execute its slow path from this ordinary C frame instead of
 				   entering the generated miss trampoline. */
-				if (!allow_unsafe_native_dispatch || !bi ||
-					handler == popall_execute_normal) {
+				/* PocketShaver's dispatcher model is the important distinction here:
+					   a cache hit must execute/reuse the existing block, while only a
+					   lookup miss enters the compiler. ARM64 native dispatch remains
+					   opt-in; the safe default interprets the cached span without
+					   compiling it again. */
+					blockinfo *cached_bi = get_blockinfo_addr(regs.pc_p);
+					if (jit_diag_enabled()) {
+						static unsigned long probe_count = 0;
+						probe_count++;
+						if (probe_count <= 32 || (probe_count & (probe_count - 1)) == 0)
+							fprintf(stderr, "JIT_DIAG cache_probe pc=%08x pc_p=%p head=%p exact=%p status=%d handler=%p\\n",
+								(unsigned)m68k_getpc(), (void *)regs.pc_p, (void *)bi,
+								(void *)cached_bi, cached_bi ? cached_bi->status : 0,
+								(void *)handler);
+					}
+					bool cached_block_ready = cached_bi &&
+						(cached_bi->status == BI_ACTIVE ||
+						 (cached_bi->status == BI_NEED_CHECK &&
+						  block_check_checksum(cached_bi)));
+					if (!allow_unsafe_native_dispatch && cached_block_ready &&
+						!jit_strict_full_jit_env()) {
+						jit_dispatch_trace("safe_cached_block", m68k_getpc(), regs.pc_p, cl,
+							 (uintptr)cached_bi->handler_to_use, cached_bi, false);
+						exec_nostats_limited(MAXRUN);
+					} else if (!allow_unsafe_native_dispatch || !bi ||
+						handler == popall_execute_normal) {
 					jit_dispatch_trace("safe_c_dispatch", m68k_getpc(), regs.pc_p, cl,
 						 (uintptr)handler, bi, allow_unsafe_native_dispatch);
 					if (jit_diag_enabled()) {
