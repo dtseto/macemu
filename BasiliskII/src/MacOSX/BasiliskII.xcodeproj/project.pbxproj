@@ -121,6 +121,33 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		0F5832CF3060A65400C58478 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		0F5832DD3060A74C00C58478 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		0F5832E93060A84B00C58478 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 		0FC3677E305C9CB40081D795 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -138,6 +165,9 @@
 		0F23BA75305B3AF2007E0935 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		0F385A1A305DD63D00FB4DD6 /* libgmp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libgmp.a; path = ../../../../../../../usr/local/universal/lib/libgmp.a; sourceTree = "<group>"; };
 		0F385A1B305DD63D00FB4DD6 /* libmpfr.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libmpfr.a; path = ../../../../../../../usr/local/universal/lib/libmpfr.a; sourceTree = "<group>"; };
+		0F5832D13060A65400C58478 /* BasiliskIIPlatformJITHarness */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BasiliskIIPlatformJITHarness; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F5832DF3060A74C00C58478 /* BasiliskIIJITArchitectureHarness */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BasiliskIIJITArchitectureHarness; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F5832EB3060A84B00C58478 /* BasiliskII68KSemanticsHarness */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BasiliskII68KSemanticsHarness; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F6C4E97305A4D2E005D4E15 /* video_neon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = video_neon.h; sourceTree = "<group>"; };
 		0F6C4EFF305AD7DE005D4E15 /* BasiliskII.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = BasiliskII.xcodeproj; path = /Users/user2/Downloads/macemu/BasiliskII/src/MacOSX/BasiliskII.xcodeproj; sourceTree = "<absolute>"; };
 		0F908C9B3059F012006579CE /* libSDL2-2.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = "libSDL2-2.0.0.dylib"; path = "../../../../../../../opt/homebrew/Cellar/sdl2/2.32.8/lib/libSDL2-2.0.0.dylib"; sourceTree = "<group>"; };
@@ -336,10 +366,34 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		0F5832D23060A65400C58478 /* BasiliskIIPlatformJITHarness */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = BasiliskIIPlatformJITHarness; sourceTree = "<group>"; };
+		0F5832E03060A74C00C58478 /* BasiliskIIJITArchitectureHarness */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = BasiliskIIJITArchitectureHarness; sourceTree = "<group>"; };
+		0F5832EC3060A84B00C58478 /* BasiliskII68KSemanticsHarness */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = BasiliskII68KSemanticsHarness; sourceTree = "<group>"; };
 		0F908CA3305A0BFE006579CE /* BasiliskIITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = BasiliskIITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		0F5832CE3060A65400C58478 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0F5832DC3060A74C00C58478 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0F5832E83060A84B00C58478 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0F908C9F305A0BFE006579CE /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -466,6 +520,9 @@
 				7539E1E41F23B25E006B2DF2 /* src */,
 				753252FF1F535E5D0024025B /* generated src */,
 				0F908CA3305A0BFE006579CE /* BasiliskIITests */,
+				0F5832D23060A65400C58478 /* BasiliskIIPlatformJITHarness */,
+				0F5832E03060A74C00C58478 /* BasiliskIIJITArchitectureHarness */,
+				0F5832EC3060A84B00C58478 /* BasiliskII68KSemanticsHarness */,
 				7539DFB31F23B17E006B2DF2 /* Products */,
 				752F26F71F240E51001032B4 /* Frameworks */,
 				0F23BA75305B3AF2007E0935 /* Makefile */,
@@ -477,6 +534,9 @@
 			children = (
 				7539DFB21F23B17E006B2DF2 /* BasiliskII.app */,
 				0F908CA2305A0BFE006579CE /* BasiliskIITests.xctest */,
+				0F5832D13060A65400C58478 /* BasiliskIIPlatformJITHarness */,
+				0F5832DF3060A74C00C58478 /* BasiliskIIJITArchitectureHarness */,
+				0F5832EB3060A84B00C58478 /* BasiliskII68KSemanticsHarness */,
 			);
 			name = Products;
 			path = ../../../../../../../../Documents/Code/macemu/BasiliskII/src/MacOSX;
@@ -716,6 +776,72 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0F5832D03060A65400C58478 /* BasiliskIIPlatformJITHarness */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F5832D93060A65400C58478 /* Build configuration list for PBXNativeTarget "BasiliskIIPlatformJITHarness" */;
+			buildPhases = (
+				0F5832CD3060A65400C58478 /* Sources */,
+				0F5832CE3060A65400C58478 /* Frameworks */,
+				0F5832CF3060A65400C58478 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0F5832D23060A65400C58478 /* BasiliskIIPlatformJITHarness */,
+			);
+			name = BasiliskIIPlatformJITHarness;
+			packageProductDependencies = (
+			);
+			productName = BasiliskIIPlatformJITHarness;
+			productReference = 0F5832D13060A65400C58478 /* BasiliskIIPlatformJITHarness */;
+			productType = "com.apple.product-type.tool";
+		};
+		0F5832DE3060A74C00C58478 /* BasiliskIIJITArchitectureHarness */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F5832E33060A74C00C58478 /* Build configuration list for PBXNativeTarget "BasiliskIIJITArchitectureHarness" */;
+			buildPhases = (
+				0F5832DB3060A74C00C58478 /* Sources */,
+				0F5832DC3060A74C00C58478 /* Frameworks */,
+				0F5832DD3060A74C00C58478 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0F5832E03060A74C00C58478 /* BasiliskIIJITArchitectureHarness */,
+			);
+			name = BasiliskIIJITArchitectureHarness;
+			packageProductDependencies = (
+			);
+			productName = BasiliskIIJITArchitectureHarness;
+			productReference = 0F5832DF3060A74C00C58478 /* BasiliskIIJITArchitectureHarness */;
+			productType = "com.apple.product-type.tool";
+		};
+		0F5832EA3060A84B00C58478 /* BasiliskII68KSemanticsHarness */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F5832EF3060A84B00C58478 /* Build configuration list for PBXNativeTarget "BasiliskII68KSemanticsHarness" */;
+			buildPhases = (
+				0F5832E73060A84B00C58478 /* Sources */,
+				0F5832E83060A84B00C58478 /* Frameworks */,
+				0F5832E93060A84B00C58478 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0F5832EC3060A84B00C58478 /* BasiliskII68KSemanticsHarness */,
+			);
+			name = BasiliskII68KSemanticsHarness;
+			packageProductDependencies = (
+			);
+			productName = BasiliskII68KSemanticsHarness;
+			productReference = 0F5832EB3060A84B00C58478 /* BasiliskII68KSemanticsHarness */;
+			productType = "com.apple.product-type.tool";
+		};
 		0F908CA1305A0BFE006579CE /* BasiliskIITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 0F908CA6305A0BFE006579CE /* Build configuration list for PBXNativeTarget "BasiliskIITests" */;
@@ -767,6 +893,15 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 0830;
 				TargetAttributes = {
+					0F5832D03060A65400C58478 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					0F5832DE3060A74C00C58478 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					0F5832EA3060A84B00C58478 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					0F908CA1305A0BFE006579CE = {
 						CreatedOnToolsVersion = 27.0;
 					};
@@ -806,6 +941,9 @@
 			targets = (
 				7539DFB11F23B17E006B2DF2 /* BasiliskII */,
 				0F908CA1305A0BFE006579CE /* BasiliskIITests */,
+				0F5832D03060A65400C58478 /* BasiliskIIPlatformJITHarness */,
+				0F5832DE3060A74C00C58478 /* BasiliskIIJITArchitectureHarness */,
+				0F5832EA3060A84B00C58478 /* BasiliskII68KSemanticsHarness */,
 			);
 		};
 /* End PBXProject section */
@@ -874,6 +1012,27 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0F5832CD3060A65400C58478 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0F5832DB3060A74C00C58478 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0F5832E73060A84B00C58478 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0F908C9E305A0BFE006579CE /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -976,6 +1135,214 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		0F5832D53060A65400C58478 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+			};
+			name = Debug;
+		};
+		0F5832D63060A65400C58478 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = YES;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+			};
+			name = Release;
+		};
+		0F5832E43060A74C00C58478 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		0F5832E53060A74C00C58478 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		0F5832F03060A84B00C58478 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		0F5832F13060A84B00C58478 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
 		0F908CA7305A0BFE006579CE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1375,6 +1742,33 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0F5832D93060A65400C58478 /* Build configuration list for PBXNativeTarget "BasiliskIIPlatformJITHarness" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0F5832D53060A65400C58478 /* Debug */,
+				0F5832D63060A65400C58478 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0F5832E33060A74C00C58478 /* Build configuration list for PBXNativeTarget "BasiliskIIJITArchitectureHarness" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0F5832E43060A74C00C58478 /* Debug */,
+				0F5832E53060A74C00C58478 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0F5832EF3060A84B00C58478 /* Build configuration list for PBXNativeTarget "BasiliskII68KSemanticsHarness" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0F5832F03060A84B00C58478 /* Debug */,
+				0F5832F13060A84B00C58478 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		0F908CA6305A0BFE006579CE /* Build configuration list for PBXNativeTarget "BasiliskIITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
