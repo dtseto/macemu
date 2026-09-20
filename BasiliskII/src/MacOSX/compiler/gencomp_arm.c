@@ -679,6 +679,28 @@ static void gen_move16(uae_u32 opcode, struct instr *curi) {
 	comprintf("\tint tmp=scratchie;\n");
 	comprintf("\tscratchie+=4;\n");
 
+#if defined(CPU_AARCH64)
+	/* Keep guest addresses in W virtual registers.  Translating them once
+	   with get_n_addr() would cache a native pointer in a guest register. */
+	comprintf("\treadlong(src,tmp+0,scratchie);\n"
+			"\tmid_bswap_32(tmp+0);\n"
+			"\tadd_l_ri(src,4);\n"
+			"\treadlong(src,tmp+1,scratchie);\n"
+			"\tmid_bswap_32(tmp+1);\n"
+			"\tadd_l_ri(src,4);\n"
+			"\treadlong(src,tmp+2,scratchie);\n"
+			"\tmid_bswap_32(tmp+2);\n"
+			"\tadd_l_ri(src,4);\n"
+			"\treadlong(src,tmp+3,scratchie);\n"
+			"\tmid_bswap_32(tmp+3);\n"
+			"\twritelong(dst,tmp+0,scratchie);\n"
+			"\tadd_l_ri(dst,4);\n"
+			"\twritelong(dst,tmp+1,scratchie);\n"
+			"\tadd_l_ri(dst,4);\n"
+			"\twritelong(dst,tmp+2,scratchie);\n"
+			"\tadd_l_ri(dst,4);\n"
+			"\twritelong(dst,tmp+3,scratchie);\n");
+#else
 	comprintf("\tget_n_addr(src,src,scratchie);\n"
 			"\tget_n_addr(dst,dst,scratchie);\n"
 			"\tmov_l_rR(tmp+0,src,0);\n"
@@ -692,6 +714,7 @@ static void gen_move16(uae_u32 opcode, struct instr *curi) {
 			"\tmov_l_Rr(dst,tmp+2,8);\n"
 			"\tforget_about(tmp+2);\n"
 			"\tmov_l_Rr(dst,tmp+3,12);\n");
+	#endif
 	close_brace();
 #endif
 }
@@ -731,7 +754,7 @@ static void genmovemel(uae_u16 opcode) {
 	if (table68k[opcode].dmode == Aipi) {
 		comprintf("\t\t\tmov_l_rr(8+dstreg,srca);\n");
 	}
-#else
+	#else
 	comprintf("\tget_n_addr(srca,native,scratchie);\n");
 
 	comprintf("\tfor (i=0;i<16;i++) {\n"
@@ -757,7 +780,7 @@ static void genmovemel(uae_u16 opcode) {
 	if (table68k[opcode].dmode == Aipi) {
 		comprintf("\t\t\tlea_l_brr(8+dstreg,srca,offset);\n");
 	}
-#endif
+	#endif
 }
 
 static void genmovemle(uae_u16 opcode) {
@@ -768,6 +791,62 @@ static void genmovemle(uae_u16 opcode) {
 	comprintf("\tsigned char offset=0;\n");
 	genamode(table68k[opcode].dmode, "dstreg", table68k[opcode].size, "src", 2,
 			1);
+
+#if defined(CPU_AARCH64)
+	if (table68k[opcode].dmode != Apdi) {
+		/* Keep guest addresses in W vregs; writelong/writeword perform the
+		   host-pointer conversion without caching a pointer in a guest vreg. */
+		comprintf("\tfor (i=0;i<16;i++) {\n"
+				"\t\tif ((mask>>i)&1) {\n");
+		switch (table68k[opcode].size) {
+		case sz_long:
+			comprintf("\t\t\tmov_l_rr(tmp,i);\n"
+					"\t\t\tmid_bswap_32(tmp);\n"
+					"\t\t\twritelong(srca,tmp,scratchie);\n"
+					"\t\t\tadd_l_ri(srca,4);\n");
+			break;
+		case sz_word:
+			comprintf("\t\t\tmov_l_rr(tmp,i);\n"
+					"\t\t\tmid_bswap_16(tmp);\n"
+					"\t\t\twriteword(srca,tmp,scratchie);\n"
+					"\t\t\tadd_l_ri(srca,2);\n");
+			break;
+		default:
+			assert(0);
+			break;
+		}
+		comprintf("\t\t}\n"
+				"\t}");
+		if (table68k[opcode].dmode == Aipi)
+			comprintf("\t\t\tmov_l_rr(8+dstreg,srca);\n");
+		return;
+	}
+	/* Pre-decrement uses the same guest-address helpers, but walks the
+	   address backwards before each store. */
+	comprintf("\tfor (i=0;i<16;i++) {\n"
+			"\t\tif ((mask>>i)&1) {\n");
+	switch (table68k[opcode].size) {
+	case sz_long:
+		comprintf("\t\t\tsub_l_ri(srca,4);\n"
+				"\t\t\tmov_l_rr(tmp,15-i);\n"
+				"\t\t\tmid_bswap_32(tmp);\n"
+				"\t\t\twritelong(srca,tmp,scratchie);\n");
+		break;
+	case sz_word:
+		comprintf("\t\t\tsub_l_ri(srca,2);\n"
+				"\t\t\tmov_l_rr(tmp,15-i);\n"
+				"\t\t\tmid_bswap_16(tmp);\n"
+				"\t\t\twriteword(srca,tmp,scratchie);\n");
+		break;
+	default:
+		assert(0);
+		break;
+	}
+	comprintf("\t\t}\n"
+			"\t}\n"
+			"\t\tmov_l_rr(8+dstreg,srca);\n");
+	return;
+#endif
 
 	comprintf("\tget_n_addr(srca,native,scratchie);\n");
 

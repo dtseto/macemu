@@ -293,12 +293,38 @@ struct BenchmarkHarnessTests {
             contentsOf: compilerDirectory.appending(path: "codegen_arm64.cpp"),
             encoding: .utf8
         )
+        let midfunc = try String(
+            contentsOf: compilerDirectory.appending(path: "compemu_midfunc_arm64.cpp"),
+            encoding: .utf8
+        )
+        let legacyCompat = try String(
+            contentsOf: compilerDirectory.appending(path: "compemu_legacy_arm64_compat.cpp"),
+            encoding: .utf8
+        )
+        let generator = try String(
+            contentsOf: compilerDirectory.appending(path: "gencomp_arm.c"),
+            encoding: .utf8
+        )
+        let config = try String(
+            contentsOf: repositoryRoot.appending(path: "BasiliskII/src/MacOSX/config.h"),
+            encoding: .utf8
+        )
 
         #expect(compilerHeader.contains("typedef uintptr jit_reg_value_t;"))
         #expect(compilerHeader.contains("jit_reg_value_t val;"))
         #expect(arm64Backend.contains("if (r != PC_P)"))
         #expect(arm64Backend.contains("arm_ADD_ptr_ri"))
         #expect(codegen.contains("pc_p/pc_oldp are 64-bit host pointers"))
+        #expect(codegen.contains("compemu_raw_mov_ptr_ri"))
+        #expect(codegen.contains("LOAD_U64"))
+        #expect(midfunc.contains("mov_ptr_ri"))
+        #expect(midfunc.contains("lea_l_brr") && midfunc.contains("d == PC_P && isconst(s)"))
+        #expect(!midfunc.contains("val > (uintptr)0xFFFFFFFF"))
+        #expect(legacyCompat.contains("CSEL_wwwc"))
+        #expect(legacyCompat.contains("CSEL_xxxc"))
+        #expect(generator.contains("readlong(src,tmp+0,scratchie)"))
+        #expect(generator.contains("writelong(dst,tmp+3,scratchie)"))
+        #expect(config.contains("AARCH64_JIT_EXPERIMENTAL"))
     }
 
     @Test("macOS ARM64 JIT allocation has a MAP_JIT fallback")

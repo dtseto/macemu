@@ -29,6 +29,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "../config.h"
+
 #if USE_JIT
 
 #if defined(CPU_aarch64) || defined(CPU_AARCH64)

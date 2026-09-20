@@ -37,6 +37,8 @@
  * Adapted for JIT compilation (c) Bernd Meyer, 2000
  */
 
+#include "../config.h"
+
 #if USE_JIT
 
 #include "sysdeps.h"

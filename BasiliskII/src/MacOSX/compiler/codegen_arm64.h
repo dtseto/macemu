@@ -189,6 +189,7 @@
 #define ADCS_xxx(Xd,Xn,Xm)        _W((0b10111010000 << 21) | ((Xm) << 16) | (0 << 10) | ((Xn) << 5) | (Xd))
 #define ADD_wwwEX(Wd,Wn,Wm,ex)    _W((0b00001011001 << 21) | ((Wm) << 16) | ((ex) << 13) | (0 << 10) | ((Wn) << 5) | (Wd))
 #define ADD_xxwEX(Xd,Xn,Wm,ex)    _W((0b10001011001 << 21) | ((Wm) << 16) | ((ex) << 13) | (0 << 10) | ((Xn) << 5) | (Xd))
+#define ADD_xxwEXLSLi(Xd,Xn,Wm,ex,sh) _W((0b10001011001 << 21) | ((Wm) << 16) | ((ex) << 13) | (((sh) & 1) << 12) | ((Xn) << 5) | (Xd))
 #define ADD_wwi(Wd,Wn,i12)        _W((0b0001000100 << 22) | (((i12) & 0xfff) << 10) | ((Wn) << 5) | (Wd))
 #define ADD_xxi(Xd,Xn,i12)        _W((0b1001000100 << 22) | (((i12) & 0xfff) << 10) | ((Xn) << 5) | (Xd))
 #define ADD_www(Wd,Wn,Wm)         _W((0b00001011000 << 21) | ((Wm) << 16) | (0 << 10) | ((Wn) << 5) | (Wd))

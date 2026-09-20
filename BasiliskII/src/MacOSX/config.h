@@ -837,7 +837,9 @@
 #define FPU_IEEE
 #endif
 
-#if defined(CPU_x86_64) && defined(JIT) && !defined(USE_JIT)
+#if ((defined(CPU_x86_64) && defined(JIT)) || \
+     (defined(CPU_AARCH64) && defined(AARCH64_JIT_EXPERIMENTAL))) && \
+    !defined(USE_JIT)
 #define USE_JIT 1
 #endif
 

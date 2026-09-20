@@ -496,11 +496,23 @@ void cmov_l_rr(RW4 d, RR4 s, uae_s32 cc)
 	if (d == s)
 		return;
 	FIX_INVERTED_CARRY
-	d = rmw(d);
+	const int dst_vreg = d;
 	const bool s_is_const = isconst(s);
+	/* PC_P and the allocator's scratch vregs are the explicit native-pointer
+	   class used by the ARM64 generator for transient translated addresses.
+	   Never materialize those values with a W move.  A guest vreg cannot be
+	   the destination of a pointer conditional move. */
+	const bool d_is_ptr = dst_vreg == PC_P || dst_vreg >= S1;
+	const bool s_is_ptr = s == PC_P || s >= S1;
+	if (s_is_ptr && !d_is_ptr)
+		jit_abort("cmov_l_rr would store a pointer in a guest vreg");
+	d = rmw(dst_vreg);
 	int src = s;
 	if (s_is_const) {
-		LOAD_U32(REG_WORK1, live.state[s].val);
+		if (d_is_ptr)
+			LOAD_U64(REG_WORK1, live.state[s].val);
+		else
+			LOAD_U32(REG_WORK1, live.state[s].val);
 		src = REG_WORK1;
 	} else {
 		src = readreg(s);
@@ -510,16 +522,28 @@ void cmov_l_rr(RW4 d, RR4 s, uae_s32 cc)
 	   borrow, so they are not ARM HI/LS after the JIT's carry normalization:
 	   HI is !C&&!Z, LS is C||Z. Preserve the original destination in a work
 	   register and compose both predicates without modifying NZCV. */
-	if (cc == 7) { /* x86 HI */
-		MOV_xx(REG_WORK2, d);
-		CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CC);
-		CSEL_xxxc(d, REG_WORK2, REG_WORK3, NATIVE_CC_EQ);
+	if (d_is_ptr) {
+		if (cc == 7) { /* x86 HI */
+			MOV_xx(REG_WORK2, d);
+			CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CC);
+			CSEL_xxxc(d, REG_WORK2, REG_WORK3, NATIVE_CC_EQ);
+		} else if (cc == 6) { /* x86 LS */
+			MOV_xx(REG_WORK2, d);
+			CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CS);
+			CSEL_xxxc(d, src, REG_WORK3, NATIVE_CC_EQ);
+		} else {
+			CSEL_xxxc(d, src, d, legacy_x86_cc_to_native(cc));
+		}
+	} else if (cc == 7) { /* x86 HI */
+		MOV_ww(REG_WORK2, d);
+		CSEL_wwwc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CC);
+		CSEL_wwwc(d, REG_WORK2, REG_WORK3, NATIVE_CC_EQ);
 	} else if (cc == 6) { /* x86 LS */
-		MOV_xx(REG_WORK2, d);
-		CSEL_xxxc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CS);
-		CSEL_xxxc(d, src, REG_WORK3, NATIVE_CC_EQ);
+		MOV_ww(REG_WORK2, d);
+		CSEL_wwwc(REG_WORK3, src, REG_WORK2, NATIVE_CC_CS);
+		CSEL_wwwc(d, src, REG_WORK3, NATIVE_CC_EQ);
 	} else {
-		CSEL_xxxc(d, src, d, legacy_x86_cc_to_native(cc));
+		CSEL_wwwc(d, src, d, legacy_x86_cc_to_native(cc));
 	}
 	if (!s_is_const)
 		unlock2(src);

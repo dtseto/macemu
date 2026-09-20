@@ -314,6 +314,14 @@ MENDFUNC(2,sign_extend_16_rr,(W4 d, RR2 s))
 
 MIDFUNC(3,lea_l_brr,(W4 d, RR4 s, IM32 offset))
 {
+#if defined(CPU_AARCH64)
+	/* Preserve the destination's type before constant folding: PC_P is a
+	   host pointer even when its current value is a compile-time constant. */
+	if (d == PC_P && isconst(s)) {
+		COMPCALL(mov_ptr_ri)(d, live.state[s].val + (uae_s64)offset);
+		return;
+	}
+#endif
 	if (isconst(s)) {
 		COMPCALL(mov_l_ri)(d, live.state[s].val+offset);
 		return;
@@ -373,6 +381,35 @@ MIDFUNC(5,lea_l_brr_indexed,(W4 d, RR4 s, RR4 index, IM8 factor, IM8 offset))
 		set_const(d, live.state[s].val + (uae_s32)(uae_s8)offset + live.state[index].val * factor);
 		return;
 	}
+
+#if defined(CPU_AARCH64)
+	if (d == PC_P) {
+		/* Indexed LEA with PC_P as the destination is pointer arithmetic.
+		   The base remains X-width; the guest index is explicitly zero-
+		   extended and scaled, so no W write can clear the pointer's high half. */
+		if (s == PC_P || index == PC_P)
+			jit_abort("indexed LEA cannot use PC_P as an index");
+		s = readreg(s);
+		index = readreg(index);
+		d = writereg(d);
+		if (offset >= 0 && offset <= 0xfff)
+			ADD_xxi(d, s, offset);
+		else if (offset < 0 && offset >= -0xfff)
+			SUB_xxi(d, s, -offset);
+		else {
+			LOAD_U64(REG_WORK1, (uintptr)(uae_s64)(uae_s8)offset);
+			ADD_xxx(d, s, REG_WORK1);
+		}
+		int shft = factor == 1 ? 0 : factor == 2 ? 1 : factor == 4 ? 2 : factor == 8 ? 3 : -1;
+		if (shft < 0)
+			jit_abort("invalid indexed LEA scale");
+		ADD_xxwEXLSLi(d, d, index, EX_UXTW, shft);
+		unlock2(d);
+		unlock2(index);
+		unlock2(s);
+		return;
+	}
+#endif
 
 	s = readreg(s);
 	if(d == index) {
@@ -438,6 +475,28 @@ MIDFUNC(4,lea_l_rr_indexed,(W4 d, RR4 s, RR4 index, IM8 factor))
 }
 MENDFUNC(4,lea_l_rr_indexed,(W4 d, RR4 s, RR4 index, IM8 factor))
 
+MIDFUNC(2,mov_ptr_ri,(W4 d, IMPTR s))
+{
+	if (d != PC_P && d < S1)
+		jit_abort("mov_ptr_ri destination is not pointer-capable");
+	set_const(d, s);
+}
+MENDFUNC(2,mov_ptr_ri,(W4 d, IMPTR s))
+
+MIDFUNC(2,mov_ptr_rr,(W4 d, RR4 s))
+{
+	if ((d != PC_P && d < S1) || (s != PC_P && s < S1))
+		jit_abort("mov_ptr_rr requires pointer-capable vregs");
+	if (d == s)
+		return;
+	s = readreg(s);
+	d = writereg(d);
+	compemu_raw_mov_ptr_rr(d, s);
+	unlock2(d);
+	unlock2(s);
+}
+MENDFUNC(2,mov_ptr_rr,(W4 d, RR4 s))
+
 MIDFUNC(2,mov_l_rr,(W4 d, RR4 s))
 {
 	int olds;
@@ -445,6 +504,18 @@ MIDFUNC(2,mov_l_rr,(W4 d, RR4 s))
 	if (d == s) { /* How pointless! */
 		return;
 	}
+#if defined(CPU_AARCH64)
+	/* Scratch vregs are the explicit transient pointer class used by
+	   get_n_addr/branch-target construction; preserve them with X moves. */
+	if (d == PC_P || s == PC_P || d >= S1 || s >= S1) {
+		if (isconst(s)) {
+			COMPCALL(mov_ptr_ri)(d, live.state[s].val);
+			return;
+		}
+		COMPCALL(mov_ptr_rr)(d, s);
+		return;
+	}
+#endif
 	if (isconst(s)) {
 		COMPCALL(mov_l_ri)(d, live.state[s].val);
 		return;
@@ -510,6 +581,12 @@ MENDFUNC(2,mov_l_rm,(W4 d, IMPTR s))
 
 MIDFUNC(2,mov_l_ri,(W4 d, IMPTR s))
 {
+#if defined(CPU_AARCH64)
+	if (d == PC_P) {
+		COMPCALL(mov_ptr_ri)(d, s);
+		return;
+	}
+#endif
 	set_const(d, s);
 }
 MENDFUNC(2,mov_l_ri,(W4 d, IMPTR s))
@@ -545,8 +622,10 @@ MIDFUNC(2,sub_l_ri,(RW4 d, IM8 i))
 	 * Reject future pointer state rather than silently changing arithmetic
 	 * width. Pointer-width callers must use the explicitly typed
 	 * arm_ADD_ptr_ri(d, -i) contract. */
-	if (d == PC_P || (isconst(d) && live.state[d].val > (uintptr)0xFFFFFFFFULL))
-		jit_abort("sub_l_ri received pointer-width state");
+#if defined(CPU_AARCH64)
+	if (d == PC_P)
+		jit_abort("sub_l_ri received pointer-width destination");
+#endif
 	if (!i)
 		return;
 	if (isconst(d)) {
@@ -713,10 +792,11 @@ MIDFUNC(2,arm_ADD_l_ri8,(RW4 d, IM8 i))
 	if (!i)
 		return;
 	if (isconst(d)) {
-		// Preserve full 64-bit if d is PC_P or already holds a 64-bit value
-		if (d == PC_P || live.state[d].val > (uintptr)0xFFFFFFFFULL)
-			live.state[d].val = live.state[d].val + i;
+#if defined(CPU_AARCH64)
+		if (d == PC_P)
+			live.state[d].val += (uae_s32)i;
 		else
+#endif
 			live.state[d].val = (uae_u32)(live.state[d].val + i);
 		return;
 	}
@@ -736,10 +816,11 @@ MIDFUNC(2,arm_SUB_l_ri8,(RW4 d, IM8 i))
 	if (!i)
 		return;
 	if (isconst(d)) {
-		// Preserve full 64-bit if d is PC_P or already holds a 64-bit value
-		if (d == PC_P || live.state[d].val > (uintptr)0xFFFFFFFFULL)
-			live.state[d].val = live.state[d].val - i;
+#if defined(CPU_AARCH64)
+		if (d == PC_P)
+			live.state[d].val -= (uae_s32)i;
 		else
+#endif
 			live.state[d].val = (uae_u32)(live.state[d].val - i);
 		return;
 	}

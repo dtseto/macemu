@@ -479,6 +479,12 @@ LOWFUNC(NONE,NONE,2,compemu_raw_mov_l_ri,(W4 d, IM32 s))
 }
 LENDFUNC(NONE,NONE,2,compemu_raw_mov_l_ri,(W4 d, IM32 s))
 
+LOWFUNC(NONE,NONE,2,compemu_raw_mov_ptr_ri,(W4 d, IMPTR s))
+{
+	LOAD_U64(d, s);
+}
+LENDFUNC(NONE,NONE,2,compemu_raw_mov_ptr_ri,(W4 d, IMPTR s))
+
 LOWFUNC(NONE,READ,2,compemu_raw_mov_l_rm,(W4 d, MEMR s))
 {
 	uintptr idx = s - (uintptr) &regs;
@@ -497,13 +503,15 @@ LENDFUNC(NONE,READ,2,compemu_raw_mov_l_rm,(W4 d, MEMR s))
 
 LOWFUNC(NONE,NONE,2,compemu_raw_mov_l_rr,(W4 d, RR4 s))
 {
-	// Use 64-bit MOV to preserve full register width.  PC_P holds a
-	// 64-bit host pointer; all other virtual registers hold 32-bit M68k
-	// values whose upper 32 bits are already zeroed by W-register ops
-	// upstream, so MOV_xx is safe for both cases.
-	MOV_xx(d, s);
+	MOV_ww(d, s);
 }
 LENDFUNC(NONE,NONE,2,compemu_raw_mov_l_rr,(W4 d, RR4 s))
+
+LOWFUNC(NONE,NONE,2,compemu_raw_mov_ptr_rr,(W4 d, RR4 s))
+{
+	MOV_xx(d, s);
+}
+LENDFUNC(NONE,NONE,2,compemu_raw_mov_ptr_rr,(W4 d, RR4 s))
 
 LOWFUNC(WRITE,RMW,1,compemu_raw_dec_m,(MEMRW d))
 {
