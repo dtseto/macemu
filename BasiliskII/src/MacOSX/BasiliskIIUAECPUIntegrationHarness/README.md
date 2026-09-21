@@ -26,6 +26,7 @@ The current program installs five bounded programs at separate guest addresses:
 - `MOVE.L D0,(A0)`;
 - `MOVE.L (A0),D0`;
 - `MOVE.L (A0)+,D0`.
+- `MOVE.L -(A0),D0`.
 - taken and not-taken `BEQ.S` cases;
 - an unconditional `BRA.S` over a skipped instruction.
 - `MOVE.L d16(A0),D0`;
