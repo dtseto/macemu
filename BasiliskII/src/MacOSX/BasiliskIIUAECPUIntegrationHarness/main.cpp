@@ -121,6 +121,16 @@ static void emit_load_long_predecrement(uae_u8 *code)
     write_word(code, 2, M68K_EXEC_RETURN);
 }
 
+static void emit_alu_sequence(uae_u8 *code)
+{
+    write_word(code, 0, 0x7001);
+    write_word(code, 2, 0x0680);
+    write_long(code, 4, 2);
+    write_word(code, 8, 0x0480);
+    write_long(code, 10, 1);
+    write_word(code, 14, M68K_EXEC_RETURN);
+}
+
 static void emit_beq_taken(uae_u8 *code)
 {
     write_word(code, 0, 0x7000);
@@ -301,7 +311,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 20> test_cases = {{
+    const std::array<TestCase, 21> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -311,6 +321,7 @@ int main()
         {"LOAD.L", guest_code_offset + 0x600, 0, 0x12345678, guest_data_offset, guest_data_offset, 0x12345678, 0x12345678, 2, emit_load_long},
         {"LOAD.L_POSTINC", guest_code_offset + 0x700, 0, 0x12345678, guest_data_offset, guest_data_offset + 4, 0x12345678, 0x12345678, 2, emit_load_long_postincrement},
         {"LOAD.L_PREDEC", guest_code_offset + 0x780, 0, 0x12345678, guest_data_offset + 4, guest_data_offset, 0x12345678, 0x12345678, 2, emit_load_long_predecrement},
+        {"ALU_SEQUENCE", guest_code_offset + 0x1500, 0, 2, 0, 0, 0, 0, 14, emit_alu_sequence},
         {"BEQ_TAKEN", guest_code_offset + 0x800, 0, 0, 0, 0, 0, 0, 6, emit_beq_taken},
         {"BEQ_NOT_TAKEN", guest_code_offset + 0x900, 0, 2, 0, 0, 0, 0, 6, emit_beq_not_taken},
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},
