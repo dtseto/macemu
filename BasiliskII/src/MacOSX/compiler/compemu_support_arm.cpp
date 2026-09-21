@@ -2135,7 +2135,9 @@ static inline bool jit_diag_enabled(void)
     static int cached = -1;
     if (cached < 0) {
         const char *env = getenv("B2_JIT_DIAG");
-        cached = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
+        const char *summary = getenv("B2_TEST_DISPATCH_SUMMARY");
+        cached = ((env && *env && strcmp(env, "0") != 0) ||
+            (summary && *summary && strcmp(summary, "0") != 0)) ? 1 : 0;
     }
     return UseJIT && cached != 0;
 }
@@ -2161,7 +2163,10 @@ extern "C" __attribute__((noinline)) void jit_diag_bad_target_breakpoint(
 static void jit_diag_check_target(const char *site, uintptr patch_address,
     uintptr target_address, uintptr written_end, uae_u32 guest_pc)
 {
-    if (!jit_diag_enabled() || !compiled_code)
+    /* Counter collection is safe in production tests; the branch-target
+       breakpoint is a separate, opt-in invariant probe because it aborts. */
+    const char *env = getenv("B2_JIT_DIAG");
+    if ((!env || !*env || strcmp(env, "0") == 0) || !compiled_code)
         return;
 
     const uintptr cache_start = (uintptr)compiled_code;
@@ -2291,11 +2296,15 @@ void jit_test_dump_dispatch_summary(void)
 {
 #if defined(CPU_AARCH64)
     if (jit_test_dispatch_summary_enabled()) {
-        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu direct_execute_normal=%lu execute_normal_cycles=%lu cycles_before=%lu cycles_after=%lu handle_except_checks=%lu handle_except_taken=%lu handle_except_cycles=%lu handle_except_received_cycles=%lu\n",
+        fprintf(stderr, "JIT_TEST_DISPATCH direct_checksum=%lu check_checksum=%lu good=%lu bad=%lu exec_normal=%lu exec_nostats=%lu recompile_block=%lu cache_miss=%lu compile=%lu fresh=%lu recomp=%lu flush_hard=%lu compiled_insns=%llu code_bytes=%llu peak_cache_bytes=%llu metadata_rebuild=%lu metadata_edges=%lu metadata_summary=%02lx direct_exec_nostats=%lu direct_execute_normal=%lu execute_normal_cycles=%lu cycles_before=%lu cycles_after=%lu handle_except_checks=%lu handle_except_taken=%lu handle_except_cycles=%lu handle_except_received_cycles=%lu\n",
             jit_test_direct_checksum_entries, jit_diag_check_checksum_calls,
             jit_diag_checksum_good, jit_diag_checksum_bad,
             jit_diag_execute_normal_calls, jit_diag_exec_nostats_calls,
-            jit_diag_recompile_block_calls, jit_test_metadata_rmw_rebuilds,
+            jit_diag_recompile_block_calls, jit_diag_cache_miss_calls,
+            jit_diag_compile_block_calls, jit_diag_compile_block_fresh,
+            jit_diag_compile_block_recomp, jit_diag_flush_icache_hard_calls,
+            jit_diag_compiled_m68k_insns, jit_diag_compiled_code_bytes,
+            jit_diag_peak_cache_bytes, jit_test_metadata_rmw_rebuilds,
             jit_test_metadata_rmw_edge_total, jit_test_metadata_rmw_summary_mask,
             jit_test_direct_exec_nostats_entries,
             jit_test_direct_execute_normal_entries,

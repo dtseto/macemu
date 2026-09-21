@@ -5,8 +5,10 @@
 #include "../compiler/compemu.h"
 
 #include <array>
+#include <chrono>
 #include <cstdio>
 #include <cstddef>
+#include <cstdlib>
 
 extern void init_m68k(void);
 extern void exit_m68k(void);
@@ -17,6 +19,7 @@ extern uintptr MEMBaseDiff;
 extern uae_u8 *fast_ram_base;
 extern uae_u32 fast_ram_size;
 extern uae_u32 RAMSize;
+extern void jit_test_dump_dispatch_summary(void);
 
 static constexpr uaecptr guest_code_offset = 0x1000;
 static constexpr uaecptr guest_data_offset = 0x2000;
@@ -28,7 +31,7 @@ static constexpr uaecptr subroutine_handler_offset = 0x2800;
 static constexpr uaecptr subroutine_stack_offset = 0x5000;
 static constexpr uaecptr loop_code_offset = 0x2a00;
 static constexpr uaecptr generated_code_offset = 0x6000;
-static std::array<uae_u8, 65536> guest_memory;
+static std::array<uae_u8, 2 * 1024 * 1024> guest_memory;
 
 struct CpuSnapshot {
     std::array<uae_u32, 8> d;
@@ -503,6 +506,69 @@ static CpuSnapshot run_loop_case(bool jit)
     return capture_snapshot();
 }
 
+static bool run_cache_pressure(unsigned count)
+{
+    /* Keep this test bounded and deterministic: at 1 MB, the production
+       cache must wrap when these distinct 32-byte guest blocks are compiled. */
+    constexpr uaecptr pressure_base = 0x80000;
+    constexpr uaecptr pressure_stride = 0x40;
+    constexpr uaecptr pressure_limit = pressure_base + pressure_stride * 12000;
+    if (pressure_limit + 32 >= guest_memory.size() || count > 12000)
+        return false;
+
+    guest_memory.fill(0);
+    for (unsigned i = 0; i < count; i++) {
+        uaecptr offset = pressure_base + pressure_stride * i;
+        uae_u8 *code = guest_memory.data() + offset;
+        write_word(code, 0, static_cast<uae_u16>(0x7000 | (i & 7)));
+        write_word(code, 2, M68K_EXEC_RETURN);
+    }
+
+    MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
+    fast_ram_base = guest_memory.data();
+    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    RAMSize = fast_ram_size;
+    UseJIT = true;
+
+    for (unsigned i = 0; i < count; i++) {
+        uaecptr offset = pressure_base + pressure_stride * i;
+        quit_program = 0;
+        regs = {};
+        regs.sr = 0x2700;
+        m68k_setpc(offset);
+        MakeFromSR();
+        regs.spcflags = 0;
+        m68k_compile_execute();
+        if (m68k_dreg(regs, 0) != (i & 7) || m68k_getpc() != offset + 2)
+            return false;
+    }
+    return true;
+}
+
+static void run_throughput_benchmark()
+{
+    constexpr unsigned samples = 1000;
+    for (unsigned i = 0; i < 10; i++) {
+        (void)run_loop_case(false);
+        (void)run_loop_case(true);
+    }
+
+    const auto measure = [](bool jit) {
+        const auto start = std::chrono::steady_clock::now();
+        for (unsigned i = 0; i < samples; i++)
+            (void)run_loop_case(jit);
+        const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        return elapsed;
+    };
+    const auto interpreter_ns = measure(false);
+    const auto jit_ns = measure(true);
+    const double speedup = jit_ns ? static_cast<double>(interpreter_ns) / jit_ns : 0.0;
+    std::printf("UAE_CPU_BENCH samples=%u interpreter_ns=%lld jit_ns=%lld speedup=%.3f PASS\n",
+        samples, static_cast<long long>(interpreter_ns),
+        static_cast<long long>(jit_ns), speedup);
+}
+
 static bool snapshots_match(const TestCase &test_case,
     const CpuSnapshot &interpreter, const CpuSnapshot &jit)
 {
@@ -521,6 +587,8 @@ static bool snapshots_match(const TestCase &test_case,
 
 int main()
 {
+    setenv("B2_TEST_DISPATCH_SUMMARY", "1", 1);
+    setenv("B2_TEST_JIT_CACHE_KB", "1024", 1);
     std::printf("UAE_CPU_INTEGRATION_BEGIN\n");
     std::printf("regstruct_size=%zu\n", sizeof(regs));
 
@@ -700,6 +768,14 @@ int main()
         static_cast<unsigned>(loop_interpreter.sr),
         static_cast<unsigned>(loop_jit.sr),
         loop_pass ? "PASS" : "FAIL");
+
+    const bool pressure_pass = run_cache_pressure(12000);
+    std::printf("UAE_CPU_CACHE_PRESSURE blocks=%u %s\n", 12000,
+        pressure_pass ? "PASS" : "FAIL");
+    all_pass = all_pass && pressure_pass;
+
+    run_throughput_benchmark();
+    jit_test_dump_dispatch_summary();
 
     const bool jit_pass = all_pass;
     std::printf("UAE_CPU_JIT_%s\n", jit_pass ? "PASS" : "FAIL");

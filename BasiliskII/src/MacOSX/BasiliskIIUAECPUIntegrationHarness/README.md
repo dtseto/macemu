@@ -56,6 +56,18 @@ Each program is run through `m68k_do_execute` and `m68k_compile_execute`. The in
 
 Each case is also executed twice through the JIT at the same guest PC to verify basic translated-block reuse produces the same state.
 
+## Production performance probes
+
+The harness now runs with a 68020 CPU model and a bounded 1 MB production translation cache. It adds three non-correctness probes:
+
+- `UAE_CPU_CACHE_PRESSURE` compiles 12,000 distinct guest blocks and verifies every result after the real cache reaches its wrap/flush path;
+- `JIT_TEST_DISPATCH` reports production direct-entry counters, dispatcher entries, fresh/recompiled blocks, cache misses, hard flushes, emitted instruction/code bytes, and peak cache usage;
+- `UAE_CPU_BENCH` measures 1,000 warmed interpreter and JIT loop samples. The benchmark is informational and does not require a speedup.
+
+The current Apple Silicon result is a correctness pass with one forced cache flush and roughly 755 KB peak code use. Direct-entry counters remain zero in this fixture, while `exec_nostats` is populated; this is useful evidence that the current production integration is still dispatcher-heavy and is not yet a direct-chaining performance baseline.
+
+For broader semantics coverage, the external [SingleStepTests/m68000 corpus](https://github.com/SingleStepTests/m68000) is the selected source: it is MIT-licensed and contains per-instruction JSON tests generated from MAME. It is intentionally not vendored into this repository because the current checkout is about 182 MB of generated vectors. The next adapter should consume its `v1/*.json.bin` files, map initial RAM/register state into this fixture, and compare final state for both interpreter and JIT paths.
+
 ```
 UAE_CPU_INTERPRETER_PASS
 UAE_CPU_JIT_PASS

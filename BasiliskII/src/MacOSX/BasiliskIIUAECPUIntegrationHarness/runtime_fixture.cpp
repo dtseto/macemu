@@ -47,8 +47,14 @@ bool PrefsFindBool(const char *name)
 
 int32 PrefsFindInt32(const char *name)
 {
-    if (std::strcmp(name, "jitcachesize") == 0)
+    if (std::strcmp(name, "jitcachesize") == 0) {
+        const char *value = std::getenv("B2_TEST_JIT_CACHE_KB");
+        if (value && *value)
+            return static_cast<int32>(std::strtol(value, nullptr, 0));
         return 8192;
+    }
+    if (std::strcmp(name, "cpu") == 0)
+        return 2; /* 68020: production JIT compilation is enabled. */
     return 0;
 }
 
