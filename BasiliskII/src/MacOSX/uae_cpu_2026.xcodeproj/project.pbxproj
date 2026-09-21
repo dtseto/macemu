@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 46;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -67,9 +67,22 @@
 		E4FC27552642C45E00C64E21 /* defs68k.c in Sources */ = {isa = PBXBuildFile; fileRef = E4FC27502642C45E00C64E21 /* defs68k.c */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		0F5832F53060A9E800C58478 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0F23BA7C305B3B79007E0935 /* compemu_arm_build.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = compemu_arm_build.cpp; sourceTree = "<group>"; };
 		0F23BA7E305B3D8D007E0935 /* jit_runtime_macosx.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = jit_runtime_macosx.cpp; sourceTree = "<group>"; };
+		0F5832F73060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = BasiliskIIUAECPUIntegrationHarness; sourceTree = BUILT_PRODUCTS_DIR; };
 		0FFE7A6C305AFAA70056A333 /* aarch64.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = aarch64.h; sourceTree = "<group>"; };
 		0FFE7A6D305AFAA70056A333 /* arm64_branch_patch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = arm64_branch_patch.h; sourceTree = "<group>"; };
 		0FFE7A6E305AFAA70056A333 /* codegen_arm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = codegen_arm.h; sourceTree = "<group>"; };
@@ -133,7 +146,18 @@
 		E4FC27502642C45E00C64E21 /* defs68k.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = defs68k.c; path = gencpu_output_2021/defs68k.c; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0F5832F83060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = BasiliskIIUAECPUIntegrationHarness; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
+		0F5832F43060A9E800C58478 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E41D7A9E2642C004005E8093 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -201,6 +225,7 @@
 				E41D7AB82642C087005E8093 /* spcflags.h */,
 				E41D7AB92642C087005E8093 /* table68k */,
 				E4FC274B2642C44A00C64E21 /* generated */,
+				0F5832F83060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */,
 				E41D7AA22642C004005E8093 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -209,6 +234,7 @@
 			isa = PBXGroup;
 			children = (
 				E41D7AA12642C004005E8093 /* libuae_cpu_arm64.a */,
+				0F5832F73060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -308,6 +334,28 @@
 /* End PBXLegacyTarget section */
 
 /* Begin PBXNativeTarget section */
+		0F5832F63060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F5832FD3060A9E800C58478 /* Build configuration list for PBXNativeTarget "BasiliskIIUAECPUIntegrationHarness" */;
+			buildPhases = (
+				0F5832F33060A9E800C58478 /* Sources */,
+				0F5832F43060A9E800C58478 /* Frameworks */,
+				0F5832F53060A9E800C58478 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0F5832F83060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */,
+			);
+			name = BasiliskIIUAECPUIntegrationHarness;
+			packageProductDependencies = (
+			);
+			productName = BasiliskIIUAECPUIntegrationHarness;
+			productReference = 0F5832F73060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */;
+			productType = "com.apple.product-type.tool";
+		};
 		E41D7AA02642C004005E8093 /* uae_cpu_arm64 */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E41D7AA52642C004005E8093 /* Build configuration list for PBXNativeTarget "uae_cpu_arm64" */;
@@ -338,6 +386,9 @@
 						CreatedOnToolsVersion = 27.0;
 						ProvisioningStyle = Automatic;
 					};
+					0F5832F63060A9E800C58478 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					E41D7AA02642C004005E8093 = {
 						CreatedOnToolsVersion = 8.2.1;
 						ProvisioningStyle = Automatic;
@@ -359,6 +410,7 @@
 			targets = (
 				E41D7AA02642C004005E8093 /* uae_cpu_arm64 */,
 				0F23BA77305B3AF8007E0935 /* Generate ARM64 JIT Sources */,
+				0F5832F63060A9E800C58478 /* BasiliskIIUAECPUIntegrationHarness */,
 			);
 		};
 /* End PBXProject section */
@@ -389,6 +441,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0F5832F33060A9E800C58478 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E41D7A9D2642C004005E8093 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -489,6 +548,115 @@
 				MTL_FAST_MATH = YES;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		0F5832FB3060A9E800C58478 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"USE_XCODE=1",
+					"CPU_aarch64=1",
+					"CPU_AARCH64=1",
+					"AARCH64_ASSEMBLY=1",
+					"AARCH64_JIT_EXPERIMENTAL=1",
+					"JIT=1",
+					"HAVE_CONFIG_H=1",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)",
+					../uae_cpu_2026,
+					../MacOSX,
+					../Unix,
+					../include,
+					/opt/homebrew/include,
+					/usr/local/include,
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"/Users/user2/Library/Developer/Xcode/DerivedData/BasiliskII-amkwwflitgjiincakhvublxadcqu/Build/Products/Debug/libuae_cpu_arm64.a",
+					/opt/homebrew/lib/libmpfr.dylib,
+					/opt/homebrew/lib/libgmp.dylib,
+					"-lpthread",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		0F5832FC3060A9E800C58478 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"USE_XCODE=1",
+					"CPU_aarch64=1",
+					"CPU_AARCH64=1",
+					"AARCH64_ASSEMBLY=1",
+					"AARCH64_JIT_EXPERIMENTAL=1",
+					"JIT=1",
+					"HAVE_CONFIG_H=1",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)",
+					../uae_cpu_2026,
+					../MacOSX,
+					../Unix,
+					../include,
+					/opt/homebrew/include,
+					/usr/local/include,
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				MTL_FAST_MATH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"/Users/user2/Library/Developer/Xcode/DerivedData/BasiliskII-amkwwflitgjiincakhvublxadcqu/Build/Products/Debug/libuae_cpu_arm64.a",
+					/opt/homebrew/lib/libmpfr.dylib,
+					/opt/homebrew/lib/libgmp.dylib,
+					"-lpthread",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
@@ -680,6 +848,15 @@
 			buildConfigurations = (
 				0F23BA79305B3AF8007E0935 /* Debug */,
 				0F23BA7A305B3AF8007E0935 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0F5832FD3060A9E800C58478 /* Build configuration list for PBXNativeTarget "BasiliskIIUAECPUIntegrationHarness" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0F5832FB3060A9E800C58478 /* Debug */,
+				0F5832FC3060A9E800C58478 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
