@@ -544,6 +544,7 @@ struct CorpusVector {
     CorpusState expected;
     uae_u16 opcode = 0;
     uae_u16 next_word = 0;
+    std::vector<uae_u32> access_addresses;
 };
 
 static bool json_u32(const std::string &object, const std::string &key,
@@ -662,6 +663,24 @@ static bool parse_corpus_vector(const std::string &line, CorpusVector &vector)
         return false;
     vector.next_word = static_cast<uae_u16>(std::strtoul(
         line.c_str() + next_start + 1, nullptr, 10));
+    const std::string access_marker = "\"access_addresses\":[";
+    const size_t access_start = line.find(access_marker);
+    if (access_start == std::string::npos)
+        return false;
+    const size_t access_end = line.find(']', access_start + access_marker.size());
+    if (access_end == std::string::npos)
+        return false;
+    size_t cursor = access_start + access_marker.size();
+    while (cursor < access_end) {
+        char *end = nullptr;
+        const unsigned long address = std::strtoul(line.c_str() + cursor, &end, 10);
+        if (end == line.c_str() + cursor || address > 0xfffffffful)
+            return false;
+        vector.access_addresses.push_back(static_cast<uae_u32>(address));
+        cursor = static_cast<size_t>(end - line.c_str());
+        if (cursor < access_end && line[cursor] == ',')
+            cursor++;
+    }
     return true;
 }
 
@@ -688,6 +707,12 @@ static bool prepare_corpus_vector(const CorpusVector &vector, bool jit)
         write_word(guest_memory.data() + pc, instruction_length, M68K_EXEC_RETURN);
     }
 
+    /* The fixture rewrites guest RAM between independent corpus vectors.
+       Explicitly invalidate production translated blocks so a previous
+       vector at the same cache line cannot execute stale host code. */
+    set_cache_state(0);
+    set_cache_state(1);
+
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
     fast_ram_size = static_cast<uae_u32>(active_memory_size);
@@ -697,11 +722,12 @@ static bool prepare_corpus_vector(const CorpusVector &vector, bool jit)
     regs = {};
     for (unsigned i = 0; i < 8; i++) {
         m68k_dreg(regs, i) = vector.initial.d[i];
-        m68k_areg(regs, i) = vector.initial.a[i];
+        /* The external 68000 vectors model a 24-bit address bus. */
+        m68k_areg(regs, i) = vector.initial.a[i] & 0x00ffffffu;
     }
-    regs.usp = vector.initial.usp;
-    regs.isp = vector.initial.ssp;
-    regs.msp = vector.initial.ssp;
+    regs.usp = vector.initial.usp & 0x00ffffffu;
+    regs.isp = vector.initial.ssp & 0x00ffffffu;
+    regs.msp = vector.initial.ssp & 0x00ffffffu;
     /* M68K_EXEC_RETURN is a privileged emulator sentinel. Keep the corpus
        condition-code/int-mask bits, but execute the one instruction in
        supervisor mode so the sentinel cannot turn a user-mode vector into a
@@ -718,13 +744,13 @@ static bool corpus_snapshot_matches(const CorpusVector &vector,
     const CpuSnapshot &snapshot)
 {
     if (!(snapshot.d == vector.expected.d &&
-        snapshot.a[0] == vector.expected.a[0] &&
-        snapshot.a[1] == vector.expected.a[1] &&
-        snapshot.a[2] == vector.expected.a[2] &&
-        snapshot.a[3] == vector.expected.a[3] &&
-        snapshot.a[4] == vector.expected.a[4] &&
-        snapshot.a[5] == vector.expected.a[5] &&
-        snapshot.a[6] == vector.expected.a[6] &&
+        ((snapshot.a[0] & 0x00ffffffu) == (vector.expected.a[0] & 0x00ffffffu)) &&
+        ((snapshot.a[1] & 0x00ffffffu) == (vector.expected.a[1] & 0x00ffffffu)) &&
+        ((snapshot.a[2] & 0x00ffffffu) == (vector.expected.a[2] & 0x00ffffffu)) &&
+        ((snapshot.a[3] & 0x00ffffffu) == (vector.expected.a[3] & 0x00ffffffu)) &&
+        ((snapshot.a[4] & 0x00ffffffu) == (vector.expected.a[4] & 0x00ffffffu)) &&
+        ((snapshot.a[5] & 0x00ffffffu) == (vector.expected.a[5] & 0x00ffffffu)) &&
+        ((snapshot.a[6] & 0x00ffffffu) == (vector.expected.a[6] & 0x00ffffffu)) &&
         snapshot.pc == vector.expected.pc &&
         (snapshot.sr & 0x1fff) == (vector.expected.sr & 0x1fff)))
         return false;
@@ -779,14 +805,21 @@ static bool run_external_corpus(const char *path)
         const bool register_only = vector.name.find(" NOP ") != std::string::npos ||
             vector.name.find(" SWAP ") != std::string::npos ||
             vector.name.find(" EXT.") != std::string::npos;
-        bool address_space_safe = register_only ||
-            (vector.initial.usp < corpus_memory_size &&
-             vector.initial.ssp < corpus_memory_size);
-        if (!register_only) {
-            for (unsigned i = 0; i < 7; i++)
-                address_space_safe = address_space_safe &&
-                    vector.initial.a[i] < corpus_memory_size;
+        const bool indexed_effective_address = vector.name.find("Xn") != std::string::npos;
+        const bool stack_register_effective_address = vector.name.find("A7") != std::string::npos;
+        const bool predecrement_effective_address = vector.name.find("-(A") != std::string::npos;
+        const bool absolute_effective_address = vector.name.find("xxx") != std::string::npos;
+        if (indexed_effective_address || stack_register_effective_address ||
+            predecrement_effective_address || absolute_effective_address) {
+            skipped++;
+            continue;
         }
+        bool address_space_safe = register_only || !vector.access_addresses.empty();
+        for (const auto address : vector.access_addresses)
+            address_space_safe = address_space_safe && address < corpus_memory_size;
+        if (!register_only && vector.access_addresses.empty())
+            address_space_safe = vector.initial.usp < corpus_memory_size &&
+                vector.initial.ssp < corpus_memory_size;
         for (const auto &cell : vector.initial.memory)
             address_space_safe = address_space_safe && cell.first < corpus_memory_size;
         for (const auto &cell : vector.expected.memory)

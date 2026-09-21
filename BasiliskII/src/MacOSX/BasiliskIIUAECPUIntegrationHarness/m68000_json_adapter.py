@@ -88,6 +88,15 @@ def normalize_test(test: Any, source: str, index: int) -> dict[str, Any]:
     initial = normalize_state(test["initial"], f"{source}[{index}].initial")
     final = normalize_state(test["final"], f"{source}[{index}].final")
     opcode = parse_opcode(test["name"])
+    access_addresses = []
+    transactions = test.get("transactions", [])
+    if not isinstance(transactions, list):
+        raise CorpusError(f"{source}[{index}].transactions must be an array")
+    for transaction in transactions:
+        if isinstance(transaction, list) and len(transaction) >= 4:
+            address = transaction[3]
+            if isinstance(address, int):
+                access_addresses.append(address)
     return {
         "source": source,
         "index": index,
@@ -96,6 +105,7 @@ def normalize_test(test: Any, source: str, index: int) -> dict[str, Any]:
         "instruction_words": [opcode, initial["prefetch"][1]],
         "initial": initial,
         "final": final,
+        "access_addresses": access_addresses,
         "length": integer(test.get("length", 0), f"{source}[{index}].length"),
     }
 

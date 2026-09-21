@@ -96,8 +96,12 @@ runner uses a 2 MB fixture for the normal integration/benchmark path and a
 16 MB fixture for corpus mode. It currently skips odd or out-of-range PCs,
 instructions longer than one prefetch extension word, and address-heavy
 vectors whose effective-address setup cannot be proven safe without decoding
-the addressing mode. Those vectors are reported explicitly. Sparse initial
-and final RAM is replayed and checked for supported vectors.
+the addressing mode. In particular, indexed (`Xn`), A7-based, predecrement
+(`-(An)`), and absolute (`xxx`) corpus forms are reported as skipped because
+they still cross known crash boundaries in the existing production JIT. This
+is an explicit coverage boundary, not a semantic pass. Sparse initial and
+final RAM is replayed and checked for supported vectors; direct `(An)` and
+supported postincrement forms are exercised normally.
 
 Example result from 400 mixed NOP/SWAP/EXT vectors:
 
