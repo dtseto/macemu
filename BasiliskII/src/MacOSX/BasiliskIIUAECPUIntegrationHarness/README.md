@@ -31,6 +31,7 @@ The current program installs five bounded programs at separate guest addresses:
 - `MOVE.L d16(A0),D0`;
 - `MOVE.L abs.L,D0`.
 - `CMPI.L` followed by taken `BEQ.S` and `BNE.S` cases.
+- signed-overflow `ADDI.L` and `SUBI.L` cases with explicit CCR expectations.
 - `TRAP #0` vector dispatch to a handler, including the supervisor stack frame.
 
 Each program is run through `m68k_do_execute` and `m68k_compile_execute`. The interpreter now runs to the explicit sentinel for multi-instruction cases. The harness compares all D registers, all A registers, PC, SR, and the guest data word, and also checks the expected D0 result, A0 result, memory result, and retired PC. A successful run ends with:

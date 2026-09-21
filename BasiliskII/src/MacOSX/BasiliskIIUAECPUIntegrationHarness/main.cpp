@@ -47,6 +47,8 @@ struct TestCase {
     uae_u32 expected_data_value;
     size_t retired_length;
     void (*emit)(uae_u8 *);
+    uae_u16 expected_sr_mask = 0;
+    uae_u16 expected_sr_bits = 0;
 };
 
 static void write_word(uae_u8 *code, size_t offset, uae_u16 value)
@@ -268,6 +270,8 @@ static bool snapshots_match(const TestCase &test_case,
         interpreter.d[0] == test_case.expected_d0 &&
         interpreter.a[0] == test_case.expected_a0 &&
         interpreter.data_value == test_case.expected_data_value &&
+        (test_case.expected_sr_mask == 0 ||
+            (interpreter.sr & test_case.expected_sr_mask) == test_case.expected_sr_bits) &&
         interpreter.pc == test_case.offset + test_case.retired_length;
 }
 
@@ -279,7 +283,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 15> test_cases = {{
+    const std::array<TestCase, 17> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -295,6 +299,8 @@ int main()
         {"LOAD.L_ABS32", guest_code_offset + 0xc00, 0, 0x12345678, 0, 0, 0x12345678, 0x12345678, 6, emit_absolute_load_long},
         {"CMPI_EQUAL_BEQ", guest_code_offset + 0xd00, 0, 5, 0, 0, 0, 0, 12, emit_cmpi_equal_branch},
         {"CMPI_NOTEQUAL_BNE", guest_code_offset + 0xe00, 0, 4, 0, 0, 0, 0, 12, emit_cmpi_not_equal_branch},
+        {"ADDI_OVERFLOW", guest_code_offset + 0xf00, 0x7fffffff, 0x80000000, 0, 0, 0, 0, 6, emit_addi, 0x001f, 0x000a},
+        {"SUBI_OVERFLOW", guest_code_offset + 0xf80, 0x80000000, 0x7fffffff, 0, 0, 0, 0, 6, emit_subi, 0x001f, 0x0002},
     }};
 
     prepare_case(test_cases[0], true);
