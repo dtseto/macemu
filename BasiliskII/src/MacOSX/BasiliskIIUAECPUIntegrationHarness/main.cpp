@@ -19,6 +19,7 @@ extern uae_u32 fast_ram_size;
 extern uae_u32 RAMSize;
 
 static constexpr uaecptr guest_code_offset = 0x1000;
+static constexpr uaecptr guest_data_offset = 0x2000;
 static std::array<uae_u8, 65536> guest_memory;
 
 struct CpuSnapshot {
@@ -26,6 +27,7 @@ struct CpuSnapshot {
     std::array<uae_u32, 8> a;
     uae_u32 pc;
     uae_u16 sr;
+    uae_u32 data_value;
 };
 
 struct TestCase {
@@ -33,6 +35,10 @@ struct TestCase {
     uaecptr offset;
     uae_u32 initial_d0;
     uae_u32 expected_d0;
+    uae_u32 initial_a0;
+    uae_u32 expected_a0;
+    uae_u32 data_value;
+    uae_u32 expected_data_value;
     size_t retired_length;
     void (*emit)(uae_u8 *);
 };
@@ -83,6 +89,24 @@ static void emit_ori(uae_u8 *code)
     write_word(code, 6, M68K_EXEC_RETURN);
 }
 
+static void emit_store_long(uae_u8 *code)
+{
+    write_word(code, 0, 0x2080);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_load_long(uae_u8 *code)
+{
+    write_word(code, 0, 0x2010);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_load_long_postincrement(uae_u8 *code)
+{
+    write_word(code, 0, 0x2018);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
 static CpuSnapshot capture_snapshot()
 {
     CpuSnapshot snapshot{};
@@ -92,12 +116,14 @@ static CpuSnapshot capture_snapshot()
     }
     snapshot.pc = m68k_getpc();
     snapshot.sr = regs.sr;
+    snapshot.data_value = get_long(guest_data_offset);
     return snapshot;
 }
 
 static void prepare_case(const TestCase &test_case, bool jit)
 {
     guest_memory.fill(0);
+    write_long(guest_memory.data(), guest_data_offset, test_case.data_value);
     test_case.emit(guest_memory.data() + test_case.offset);
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
@@ -110,6 +136,7 @@ static void prepare_case(const TestCase &test_case, bool jit)
     regs = {};
     regs.sr = 0x2700;
     m68k_dreg(regs, 0) = test_case.initial_d0;
+    m68k_areg(regs, 0) = test_case.initial_a0;
     m68k_setpc(test_case.offset);
     MakeFromSR();
     regs.spcflags = jit ? 0 : SPCFLAG_BRK;
@@ -136,6 +163,8 @@ static bool snapshots_match(const TestCase &test_case,
         interpreter.pc == jit.pc &&
         interpreter.sr == jit.sr &&
         interpreter.d[0] == test_case.expected_d0 &&
+        interpreter.a[0] == test_case.expected_a0 &&
+        interpreter.data_value == test_case.expected_data_value &&
         interpreter.pc == test_case.offset + test_case.retired_length;
 }
 
@@ -147,12 +176,15 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 5> test_cases = {{
-        {"MOVEQ", guest_code_offset, 0, 5, 2, emit_moveq},
-        {"ADDI.L", guest_code_offset + 0x100, 5, 6, 6, emit_addi},
-        {"SUBI.L", guest_code_offset + 0x200, 5, 4, 6, emit_subi},
-        {"ANDI.L", guest_code_offset + 0x300, 0xf0f0f0f0, 0x00000000, 6, emit_andi},
-        {"ORI.L", guest_code_offset + 0x400, 0xf0f0f0f0, 0xffffffff, 6, emit_ori},
+    const std::array<TestCase, 8> test_cases = {{
+        {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
+        {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
+        {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
+        {"ANDI.L", guest_code_offset + 0x300, 0xf0f0f0f0, 0x00000000, 0, 0, 0, 0, 6, emit_andi},
+        {"ORI.L", guest_code_offset + 0x400, 0xf0f0f0f0, 0xffffffff, 0, 0, 0, 0, 6, emit_ori},
+        {"STORE.L", guest_code_offset + 0x500, 0x12345678, 0x12345678, guest_data_offset, guest_data_offset, 0, 0x12345678, 2, emit_store_long},
+        {"LOAD.L", guest_code_offset + 0x600, 0, 0x12345678, guest_data_offset, guest_data_offset, 0x12345678, 0x12345678, 2, emit_load_long},
+        {"LOAD.L_POSTINC", guest_code_offset + 0x700, 0, 0x12345678, guest_data_offset, guest_data_offset + 4, 0x12345678, 0x12345678, 2, emit_load_long_postincrement},
     }};
 
     prepare_case(test_cases[0], true);
@@ -165,10 +197,14 @@ int main()
         const CpuSnapshot jit = run_case(test_case, true);
         const bool test_pass = snapshots_match(test_case, interpreter, jit);
         all_pass = all_pass && test_pass;
-        std::printf("UAE_CPU_CASE_%s interp_d0=%08x jit_d0=%08x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
+        std::printf("UAE_CPU_CASE_%s interp_d0=%08x jit_d0=%08x interp_a0=%08x jit_a0=%08x interp_mem=%08x jit_mem=%08x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
             test_case.name,
             static_cast<unsigned>(interpreter.d[0]),
             static_cast<unsigned>(jit.d[0]),
+            static_cast<unsigned>(interpreter.a[0]),
+            static_cast<unsigned>(jit.a[0]),
+            static_cast<unsigned>(interpreter.data_value),
+            static_cast<unsigned>(jit.data_value),
             static_cast<unsigned>(interpreter.pc),
             static_cast<unsigned>(jit.pc),
             static_cast<unsigned>(interpreter.sr),
