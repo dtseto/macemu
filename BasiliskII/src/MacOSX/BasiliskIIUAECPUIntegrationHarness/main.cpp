@@ -145,6 +145,26 @@ static void emit_absolute_load_long(uae_u8 *code)
     write_word(code, 6, M68K_EXEC_RETURN);
 }
 
+static void emit_cmpi_equal_branch(uae_u8 *code)
+{
+    write_word(code, 0, 0x7005);
+    write_word(code, 2, 0x0c80);
+    write_long(code, 4, 5);
+    write_word(code, 8, 0x6702);
+    write_word(code, 10, 0x7001);
+    write_word(code, 12, M68K_EXEC_RETURN);
+}
+
+static void emit_cmpi_not_equal_branch(uae_u8 *code)
+{
+    write_word(code, 0, 0x7004);
+    write_word(code, 2, 0x0c80);
+    write_long(code, 4, 5);
+    write_word(code, 8, 0x6602);
+    write_word(code, 10, 0x7001);
+    write_word(code, 12, M68K_EXEC_RETURN);
+}
+
 static CpuSnapshot capture_snapshot()
 {
     CpuSnapshot snapshot{};
@@ -214,7 +234,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 13> test_cases = {{
+    const std::array<TestCase, 15> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -228,6 +248,8 @@ int main()
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},
         {"LOAD.L_DISP16", guest_code_offset + 0xb00, 0, 0x12345678, guest_data_offset, guest_data_offset, 0x12345678, 0x12345678, 4, emit_disp_load_long},
         {"LOAD.L_ABS32", guest_code_offset + 0xc00, 0, 0x12345678, 0, 0, 0x12345678, 0x12345678, 6, emit_absolute_load_long},
+        {"CMPI_EQUAL_BEQ", guest_code_offset + 0xd00, 0, 5, 0, 0, 0, 0, 12, emit_cmpi_equal_branch},
+        {"CMPI_NOTEQUAL_BNE", guest_code_offset + 0xe00, 0, 4, 0, 0, 0, 0, 12, emit_cmpi_not_equal_branch},
     }};
 
     prepare_case(test_cases[0], true);
