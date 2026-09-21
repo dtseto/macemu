@@ -80,6 +80,28 @@ opcode extracted from the corpus test name, the first two instruction words,
 and the source vector identity. This gives the eventual C++ differential
 runner a stable input contract without copying the upstream corpus into git.
 
+The integration executable now consumes that JSONL format directly for the
+single-word-vector milestone:
+
+```sh
+./BasiliskIIUAECPUIntegrationHarness --corpus /tmp/m68000.jsonl
+```
+
+It restores the corpus registers and PC, runs the instruction once through
+the interpreter and once through the production JIT, and compares all data
+registers, address registers, PC, and condition-code/int-mask bits. Because
+`M68K_EXEC_RETURN` is a privileged test sentinel, corpus vectors execute with
+the S bit synthesized and the comparison masks only that synthetic bit. The
+runner currently skips odd or out-of-range PCs and reports them explicitly;
+extension-word execution and sparse RAM replay are the next corpus-runner
+increment.
+
+Example result from 400 mixed NOP/SWAP/EXT vectors:
+
+```
+UAE_CPU_CORPUS_RESULT total=50 passed=50 skipped=350 malformed=0 PASS
+```
+
 ```
 UAE_CPU_INTERPRETER_PASS
 UAE_CPU_JIT_PASS

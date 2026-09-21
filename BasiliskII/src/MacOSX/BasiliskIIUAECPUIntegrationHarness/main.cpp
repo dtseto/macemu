@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstddef>
 #include <cstdlib>
+#include <fstream>
+#include <string>
 
 extern void init_m68k(void);
 extern void exit_m68k(void);
@@ -506,6 +508,227 @@ static CpuSnapshot run_loop_case(bool jit)
     return capture_snapshot();
 }
 
+struct CorpusState {
+    std::array<uae_u32, 8> d{};
+    std::array<uae_u32, 8> a{};
+    uae_u32 usp = 0;
+    uae_u32 ssp = 0;
+    uae_u16 sr = 0;
+    uae_u32 pc = 0;
+};
+
+struct CorpusVector {
+    std::string name;
+    CorpusState initial;
+    CorpusState expected;
+    uae_u16 opcode = 0;
+    uae_u16 next_word = 0;
+};
+
+static bool json_u32(const std::string &object, const std::string &key,
+    uae_u32 &value)
+{
+    const std::string marker = "\"" + key + "\":";
+    const size_t start = object.find(marker);
+    if (start == std::string::npos)
+        return false;
+    char *end = nullptr;
+    const unsigned long parsed = std::strtoul(
+        object.c_str() + start + marker.size(), &end, 10);
+    if (end == object.c_str() + start + marker.size() || parsed > 0xfffffffful)
+        return false;
+    value = static_cast<uae_u32>(parsed);
+    return true;
+}
+
+static bool json_string(const std::string &object, const std::string &key,
+    std::string &value)
+{
+    const std::string marker = "\"" + key + "\":\"";
+    const size_t start = object.find(marker);
+    if (start == std::string::npos)
+        return false;
+    const size_t value_start = start + marker.size();
+    const size_t value_end = object.find('"', value_start);
+    if (value_end == std::string::npos)
+        return false;
+    value = object.substr(value_start, value_end - value_start);
+    return true;
+}
+
+static bool json_object(const std::string &line, const std::string &key,
+    std::string &object)
+{
+    const std::string marker = "\"" + key + "\":{";
+    const size_t start = line.find(marker);
+    if (start == std::string::npos)
+        return false;
+    const size_t object_start = start + marker.size() - 1;
+    const size_t object_end = line.find("},\"", object_start);
+    if (object_end == std::string::npos)
+        return false;
+    object = line.substr(object_start, object_end - object_start + 1);
+    return true;
+}
+
+static bool parse_corpus_state(const std::string &object, CorpusState &state)
+{
+    uae_u32 value = 0;
+    for (unsigned i = 0; i < 8; i++) {
+        if (!json_u32(object, "d" + std::to_string(i), value))
+            return false;
+        state.d[i] = value;
+    }
+    for (unsigned i = 0; i < 7; i++) {
+        if (!json_u32(object, "a" + std::to_string(i), value))
+            return false;
+        state.a[i] = value;
+    }
+    return json_u32(object, "usp", state.usp) &&
+        json_u32(object, "ssp", state.ssp) &&
+        json_u32(object, "sr", value) &&
+        (state.sr = static_cast<uae_u16>(value), true) &&
+        json_u32(object, "pc", state.pc);
+}
+
+static bool parse_corpus_vector(const std::string &line, CorpusVector &vector)
+{
+    uae_u32 value = 0;
+    std::string initial_object;
+    std::string final_object;
+    if (!json_string(line, "name", vector.name) ||
+        !json_object(line, "initial", initial_object) ||
+        !json_object(line, "final", final_object) ||
+        !parse_corpus_state(initial_object, vector.initial) ||
+        !parse_corpus_state(final_object, vector.expected) ||
+        !json_u32(line, "opcode", value))
+        return false;
+    vector.opcode = static_cast<uae_u16>(value);
+    const std::string words_marker = "\"instruction_words\":[";
+    const size_t words_start = line.find(words_marker);
+    if (words_start == std::string::npos)
+        return false;
+    const size_t next_start = line.find(',', words_start + words_marker.size());
+    if (next_start == std::string::npos)
+        return false;
+    vector.next_word = static_cast<uae_u16>(std::strtoul(
+        line.c_str() + next_start + 1, nullptr, 10));
+    return true;
+}
+
+static void prepare_corpus_vector(const CorpusVector &vector, bool jit)
+{
+    guest_memory.fill(0);
+    const uaecptr pc = vector.initial.pc;
+    write_word(guest_memory.data() + pc, 0, vector.opcode);
+    /* The first adapter milestone executes single-word instructions. The
+       second prefetched word is retained in the vector for the upcoming
+       extension-word runner, but must not execute as a second instruction. */
+    write_word(guest_memory.data() + pc, 2, M68K_EXEC_RETURN);
+
+    MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
+    fast_ram_base = guest_memory.data();
+    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    RAMSize = fast_ram_size;
+    UseJIT = jit;
+    quit_program = 0;
+    regs = {};
+    for (unsigned i = 0; i < 8; i++) {
+        m68k_dreg(regs, i) = vector.initial.d[i];
+        m68k_areg(regs, i) = vector.initial.a[i];
+    }
+    regs.usp = vector.initial.usp;
+    regs.isp = vector.initial.ssp;
+    regs.msp = vector.initial.ssp;
+    /* M68K_EXEC_RETURN is a privileged emulator sentinel. Keep the corpus
+       condition-code/int-mask bits, but execute the one instruction in
+       supervisor mode so the sentinel cannot turn a user-mode vector into a
+       privilege exception. The final comparison masks the synthetic S bit. */
+    m68k_areg(regs, 7) = vector.initial.ssp;
+    regs.sr = static_cast<uae_u16>(vector.initial.sr | 0x2000);
+    m68k_setpc(pc);
+    MakeFromSR();
+    regs.spcflags = 0;
+}
+
+static bool corpus_snapshot_matches(const CorpusVector &vector,
+    const CpuSnapshot &snapshot)
+{
+    return snapshot.d == vector.expected.d &&
+        snapshot.a[0] == vector.expected.a[0] &&
+        snapshot.a[1] == vector.expected.a[1] &&
+        snapshot.a[2] == vector.expected.a[2] &&
+        snapshot.a[3] == vector.expected.a[3] &&
+        snapshot.a[4] == vector.expected.a[4] &&
+        snapshot.a[5] == vector.expected.a[5] &&
+        snapshot.a[6] == vector.expected.a[6] &&
+        snapshot.pc == vector.expected.pc &&
+        (snapshot.sr & 0x1fff) == (vector.expected.sr & 0x1fff);
+}
+
+static CpuSnapshot capture_corpus_snapshot()
+{
+    CpuSnapshot snapshot{};
+    for (unsigned i = 0; i < 8; i++) {
+        snapshot.d[i] = m68k_dreg(regs, i);
+        snapshot.a[i] = m68k_areg(regs, i);
+    }
+    snapshot.pc = m68k_getpc();
+    snapshot.sr = regs.sr;
+    return snapshot;
+}
+
+static bool run_external_corpus(const char *path)
+{
+    std::ifstream input(path);
+    if (!input)
+        return false;
+    unsigned total = 0;
+    unsigned passed = 0;
+    unsigned malformed = 0;
+    unsigned skipped = 0;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty())
+            continue;
+        CorpusVector vector;
+        if (!parse_corpus_vector(line, vector)) {
+            malformed++;
+            continue;
+        }
+        if ((vector.initial.pc & 1) != 0 ||
+            vector.initial.pc + 6 >= guest_memory.size()) {
+            skipped++;
+            continue;
+        }
+        total++;
+        prepare_corpus_vector(vector, false);
+        m68k_do_execute();
+        MakeSR();
+        const CpuSnapshot interpreter = capture_corpus_snapshot();
+        prepare_corpus_vector(vector, true);
+        m68k_compile_execute();
+        MakeSR();
+        const CpuSnapshot jit = capture_corpus_snapshot();
+        const bool pass = corpus_snapshot_matches(vector, interpreter) &&
+            corpus_snapshot_matches(vector, jit) &&
+            interpreter.d == jit.d && interpreter.a == jit.a &&
+            interpreter.pc == jit.pc && interpreter.sr == jit.sr;
+        if (pass)
+            passed++;
+        else if (total <= 8)
+            std::printf("UAE_CPU_CORPUS_FAIL name=%s expected_pc=%08x interp_pc=%08x jit_pc=%08x expected_sr=%04x interp_sr=%04x jit_sr=%04x\n",
+                vector.name.c_str(), static_cast<unsigned>(vector.expected.pc),
+                static_cast<unsigned>(interpreter.pc), static_cast<unsigned>(jit.pc),
+                static_cast<unsigned>(vector.expected.sr),
+                static_cast<unsigned>(interpreter.sr), static_cast<unsigned>(jit.sr));
+    }
+    std::printf("UAE_CPU_CORPUS_RESULT total=%u passed=%u skipped=%u malformed=%u %s\n",
+        total, passed, skipped, malformed,
+        total != 0 && malformed == 0 && passed == total ? "PASS" : "FAIL");
+    return total != 0 && malformed == 0 && passed == total;
+}
+
 static bool run_cache_pressure(unsigned count)
 {
     /* Keep this test bounded and deterministic: at 1 MB, the production
@@ -585,7 +808,7 @@ static bool snapshots_match(const TestCase &test_case,
         interpreter.pc == test_case.offset + test_case.retired_length;
 }
 
-int main()
+int main(int argc, char **argv)
 {
     setenv("B2_TEST_DISPATCH_SUMMARY", "1", 1);
     setenv("B2_TEST_JIT_CACHE_KB", "1024", 1);
@@ -594,6 +817,14 @@ int main()
 
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
+
+    if (argc == 3 && std::string(argv[1]) == "--corpus") {
+        compiler_init();
+        const bool corpus_pass = run_external_corpus(argv[2]);
+        compiler_exit();
+        exit_m68k();
+        return corpus_pass ? 0 : 1;
+    }
 
     const std::array<TestCase, 42> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
