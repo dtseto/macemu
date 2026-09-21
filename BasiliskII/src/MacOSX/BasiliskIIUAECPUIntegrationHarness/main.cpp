@@ -27,6 +27,7 @@ static constexpr uaecptr subroutine_code_offset = 0x2600;
 static constexpr uaecptr subroutine_handler_offset = 0x2800;
 static constexpr uaecptr subroutine_stack_offset = 0x5000;
 static constexpr uaecptr loop_code_offset = 0x2a00;
+static constexpr uaecptr generated_code_offset = 0x6000;
 static std::array<uae_u8, 65536> guest_memory;
 
 struct CpuSnapshot {
@@ -367,6 +368,43 @@ static CpuSnapshot run_case(const TestCase &test_case, bool jit)
     return capture_snapshot();
 }
 
+static CpuSnapshot run_generated_case(bool jit, uaecptr offset,
+    uae_u32 seed, uae_u32 add_value, uae_u32 xor_value, uae_u32 and_value)
+{
+    guest_memory.fill(0);
+    uae_u8 *code = guest_memory.data() + offset;
+    write_word(code, 0, 0x203c);
+    write_long(code, 2, seed);
+    write_word(code, 6, 0x0680);
+    write_long(code, 8, add_value);
+    write_word(code, 12, 0x0a80);
+    write_long(code, 14, xor_value);
+    write_word(code, 18, 0x0280);
+    write_long(code, 20, and_value);
+    write_word(code, 24, M68K_EXEC_RETURN);
+
+    MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
+    fast_ram_base = guest_memory.data();
+    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    RAMSize = fast_ram_size;
+    UseJIT = jit;
+    quit_program = 0;
+
+    regs = {};
+    regs.sr = 0x2700;
+    m68k_setpc(offset);
+    MakeFromSR();
+    regs.spcflags = 0;
+
+    if (jit)
+        m68k_compile_execute();
+    else
+        m68k_do_execute();
+
+    MakeSR();
+    return capture_snapshot();
+}
+
 static CpuSnapshot run_trap_case(bool jit)
 {
     guest_memory.fill(0);
@@ -564,6 +602,31 @@ int main()
             static_cast<unsigned>(jit.sr),
             test_pass ? "PASS" : "FAIL");
     }
+
+    bool generated_pass = true;
+    constexpr unsigned generated_case_count = 32;
+    for (unsigned i = 0; i < generated_case_count; i++) {
+        const uae_u32 seed = 0x13579bdfu + i * 0x1020304u;
+        const uae_u32 add_value = 0x2468ace0u ^ (i * 0x01010101u);
+        const uae_u32 xor_value = 0xf0f0f0f0u ^ (i * 0x00110011u);
+        const uae_u32 and_value = 0xff00ffffu ^ (i * 0x00010001u);
+        const uae_u32 expected = ((seed + add_value) ^ xor_value) & and_value;
+        const uaecptr offset = generated_code_offset + i * 0x100;
+        const CpuSnapshot generated_interpreter = run_generated_case(
+            false, offset, seed, add_value, xor_value, and_value);
+        const CpuSnapshot generated_jit = run_generated_case(
+            true, offset, seed, add_value, xor_value, and_value);
+        const bool case_pass = generated_interpreter.d == generated_jit.d &&
+            generated_interpreter.a == generated_jit.a &&
+            generated_interpreter.pc == generated_jit.pc &&
+            generated_interpreter.sr == generated_jit.sr &&
+            generated_interpreter.d[0] == expected &&
+            generated_interpreter.pc == offset + 24;
+        generated_pass = generated_pass && case_pass;
+    }
+    all_pass = all_pass && generated_pass;
+    std::printf("UAE_CPU_CASE_GENERATED_MATRIX cases=%u %s\n",
+        generated_case_count, generated_pass ? "PASS" : "FAIL");
 
     const CpuSnapshot trap_interpreter = run_trap_case(false);
     const CpuSnapshot trap_jit = run_trap_case(true);
