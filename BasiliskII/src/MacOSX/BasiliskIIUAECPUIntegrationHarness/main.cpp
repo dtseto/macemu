@@ -53,6 +53,8 @@ struct TestCase {
     void (*emit)(uae_u8 *);
     uae_u16 expected_sr_mask = 0;
     uae_u16 expected_sr_bits = 0;
+    uae_u32 initial_d1 = 0;
+    uae_u32 expected_d1 = 0;
 };
 
 static void write_word(uae_u8 *code, size_t offset, uae_u16 value)
@@ -336,6 +338,7 @@ static void prepare_case(const TestCase &test_case, bool jit)
     regs = {};
     regs.sr = 0x2700;
     m68k_dreg(regs, 0) = test_case.initial_d0;
+    m68k_dreg(regs, 1) = test_case.initial_d1;
     m68k_areg(regs, 0) = test_case.initial_a0;
     m68k_setpc(test_case.offset);
     MakeFromSR();
@@ -461,6 +464,7 @@ static bool snapshots_match(const TestCase &test_case,
         interpreter.pc == jit.pc &&
         interpreter.sr == jit.sr &&
         interpreter.d[0] == test_case.expected_d0 &&
+        (test_case.expected_d1 == 0 || interpreter.d[1] == test_case.expected_d1) &&
         interpreter.a[0] == test_case.expected_a0 &&
         interpreter.data_value == test_case.expected_data_value &&
         (test_case.expected_sr_mask == 0 ||
@@ -476,7 +480,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 40> test_cases = {{
+    const std::array<TestCase, 41> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -506,6 +510,7 @@ int main()
         {"LOAD.B", guest_code_offset + 0x1e80, 0x12345600, 0x12345680, guest_data_offset, guest_data_offset, 0x80000000, 0x80000000, 2, emit_load_byte, 0x001f, 0x0008},
         {"LOAD.L_PC_RELATIVE", guest_code_offset + 0x1f00, 0, 0x89abcdef, 0, 0, 0, 0, 4, emit_pc_relative_load},
         {"LOAD.L_INDEXED", guest_code_offset + 0x1f80, 0, 0x12345678, guest_data_offset, guest_data_offset, 0x12345678, 0x12345678, 4, emit_indexed_load},
+        {"LOAD.L_INDEXED_NONZERO", guest_code_offset + 0x1fc0, 0, 0x12345678, guest_data_offset - 4, guest_data_offset - 4, 0x12345678, 0x12345678, 4, emit_indexed_load, 0, 0, 4, 4},
         {"BEQ_TAKEN", guest_code_offset + 0x800, 0, 0, 0, 0, 0, 0, 6, emit_beq_taken},
         {"BEQ_NOT_TAKEN", guest_code_offset + 0x900, 0, 2, 0, 0, 0, 0, 6, emit_beq_not_taken},
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},
