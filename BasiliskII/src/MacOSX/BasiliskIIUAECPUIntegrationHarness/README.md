@@ -68,6 +68,18 @@ The current Apple Silicon result is a correctness pass with one forced cache flu
 
 For broader semantics coverage, the external [SingleStepTests/m68000 corpus](https://github.com/SingleStepTests/m68000) is the selected source: it is MIT-licensed and contains per-instruction JSON tests generated from MAME. It is intentionally not vendored into this repository because the current checkout is about 182 MB of generated vectors. The next adapter should consume its `v1/*.json.bin` files, map initial RAM/register state into this fixture, and compare final state for both interpreter and JIT paths.
 
+`m68000_json_adapter.py` is now the first adapter step. Run the upstream
+`decode.py` once to convert a corpus `.json.bin` file, then normalize it:
+
+```sh
+python3 m68000_json_adapter.py /path/to/NOP.json -o /tmp/nop.jsonl --limit 100
+```
+
+Each output line preserves the initial/final register and RAM state, the
+opcode extracted from the corpus test name, the first two instruction words,
+and the source vector identity. This gives the eventual C++ differential
+runner a stable input contract without copying the upstream corpus into git.
+
 ```
 UAE_CPU_INTERPRETER_PASS
 UAE_CPU_JIT_PASS
