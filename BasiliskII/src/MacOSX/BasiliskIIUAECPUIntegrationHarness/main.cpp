@@ -228,6 +228,15 @@ static void emit_indexed_load(uae_u8 *code)
     write_word(code, 4, M68K_EXEC_RETURN);
 }
 
+static void emit_load_add_store(uae_u8 *code)
+{
+    write_word(code, 0, 0x2010);
+    write_word(code, 2, 0x0680);
+    write_long(code, 4, 1);
+    write_word(code, 8, 0x2080);
+    write_word(code, 10, M68K_EXEC_RETURN);
+}
+
 static void emit_decrement_loop(uae_u8 *code)
 {
     write_word(code, 0, 0x707f);
@@ -480,7 +489,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 41> test_cases = {{
+    const std::array<TestCase, 42> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -511,6 +520,7 @@ int main()
         {"LOAD.L_PC_RELATIVE", guest_code_offset + 0x1f00, 0, 0x89abcdef, 0, 0, 0, 0, 4, emit_pc_relative_load},
         {"LOAD.L_INDEXED", guest_code_offset + 0x1f80, 0, 0x12345678, guest_data_offset, guest_data_offset, 0x12345678, 0x12345678, 4, emit_indexed_load},
         {"LOAD.L_INDEXED_NONZERO", guest_code_offset + 0x1fc0, 0, 0x12345678, guest_data_offset - 4, guest_data_offset - 4, 0x12345678, 0x12345678, 4, emit_indexed_load, 0, 0, 4, 4},
+        {"LOAD_ADD_STORE", guest_code_offset + 0x3000, 0, 0x12345679, guest_data_offset, guest_data_offset, 0x12345678, 0x12345679, 10, emit_load_add_store},
         {"BEQ_TAKEN", guest_code_offset + 0x800, 0, 0, 0, 0, 0, 0, 6, emit_beq_taken},
         {"BEQ_NOT_TAKEN", guest_code_offset + 0x900, 0, 2, 0, 0, 0, 0, 6, emit_beq_not_taken},
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},

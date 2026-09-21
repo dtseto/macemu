@@ -41,6 +41,7 @@ The current program installs five bounded programs at separate guest addresses:
 - PC-relative long load from a literal embedded after the instruction stream.
 - indexed `d8(A0,D1)` long load.
 - indexed load with a nonzero D1 displacement contribution.
+- multi-instruction long load/add/store sequence with memory writeback.
 - taken and not-taken `BEQ.S` cases;
 - an unconditional `BRA.S` over a skipped instruction.
 - `MOVE.L d16(A0),D0`;
