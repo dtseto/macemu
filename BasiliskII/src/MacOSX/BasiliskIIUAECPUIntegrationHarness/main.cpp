@@ -148,6 +148,18 @@ static void emit_moveq_minus_one(uae_u8 *code)
     write_word(code, 2, M68K_EXEC_RETURN);
 }
 
+static void emit_ext_long(uae_u8 *code)
+{
+    write_word(code, 0, 0x48c0);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_swap(uae_u8 *code)
+{
+    write_word(code, 0, 0x4840);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
 static void emit_decrement_loop(uae_u8 *code)
 {
     write_word(code, 0, 0x7003);
@@ -398,7 +410,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 28> test_cases = {{
+    const std::array<TestCase, 30> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -416,6 +428,8 @@ int main()
         {"ANDI_MIXED_BITS", guest_code_offset + 0x1880, 0x12345678, 0x02040608, 0, 0, 0, 0, 6, emit_andi, 0x001f, 0x0000},
         {"ORI_FROM_ZERO", guest_code_offset + 0x1900, 0, 0x0f0f0f0f, 0, 0, 0, 0, 6, emit_ori, 0x001f, 0x0000},
         {"SUBI_FROM_ZERO", guest_code_offset + 0x1980, 0, 0xffffffff, 0, 0, 0, 0, 6, emit_subi, 0x001f, 0x0019},
+        {"EXT.L_SIGN_EXTEND", guest_code_offset + 0x1a00, 0x00008000, 0xffff8000, 0, 0, 0, 0, 2, emit_ext_long},
+        {"SWAP", guest_code_offset + 0x1a80, 0x12345678, 0x56781234, 0, 0, 0, 0, 2, emit_swap},
         {"BEQ_TAKEN", guest_code_offset + 0x800, 0, 0, 0, 0, 0, 0, 6, emit_beq_taken},
         {"BEQ_NOT_TAKEN", guest_code_offset + 0x900, 0, 2, 0, 0, 0, 0, 6, emit_beq_not_taken},
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},
