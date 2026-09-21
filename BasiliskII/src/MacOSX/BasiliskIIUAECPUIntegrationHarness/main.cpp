@@ -173,6 +173,18 @@ static void emit_cmpi_not_equal_branch(uae_u8 *code)
     write_word(code, 12, M68K_EXEC_RETURN);
 }
 
+static void emit_lsl_long(uae_u8 *code)
+{
+    write_word(code, 0, 0xe388);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_lsr_long(uae_u8 *code)
+{
+    write_word(code, 0, 0xe288);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
 static CpuSnapshot capture_snapshot()
 {
     CpuSnapshot snapshot{};
@@ -283,7 +295,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 17> test_cases = {{
+    const std::array<TestCase, 19> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -301,6 +313,8 @@ int main()
         {"CMPI_NOTEQUAL_BNE", guest_code_offset + 0xe00, 0, 4, 0, 0, 0, 0, 12, emit_cmpi_not_equal_branch},
         {"ADDI_OVERFLOW", guest_code_offset + 0xf00, 0x7fffffff, 0x80000000, 0, 0, 0, 0, 6, emit_addi, 0x001f, 0x000a},
         {"SUBI_OVERFLOW", guest_code_offset + 0xf80, 0x80000000, 0x7fffffff, 0, 0, 0, 0, 6, emit_subi, 0x001f, 0x0002},
+        {"LSL.L", guest_code_offset + 0x1100, 0x40000000, 0x80000000, 0, 0, 0, 0, 2, emit_lsl_long},
+        {"LSR.L", guest_code_offset + 0x1200, 1, 0, 0, 0, 0, 0, 2, emit_lsr_long},
     }};
 
     prepare_case(test_cases[0], true);
