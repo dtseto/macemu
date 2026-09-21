@@ -92,9 +92,10 @@ the interpreter and once through the production JIT, and compares all data
 registers, address registers, PC, and condition-code/int-mask bits. Because
 `M68K_EXEC_RETURN` is a privileged test sentinel, corpus vectors execute with
 the S bit synthesized and the comparison masks only that synthetic bit. The
-runner currently skips odd or out-of-range PCs and reports them explicitly;
-extension-word execution and sparse RAM replay are the next corpus-runner
-increment.
+runner currently skips odd or out-of-range PCs, instructions longer than one
+prefetch extension word, and vectors whose effective-address setup cannot fit
+the bounded fixture. Those vectors are reported explicitly. Sparse initial
+and final RAM is now replayed and checked for supported vectors.
 
 Example result from 400 mixed NOP/SWAP/EXT vectors:
 

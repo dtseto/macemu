@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 extern void init_m68k(void);
 extern void exit_m68k(void);
@@ -515,6 +517,7 @@ struct CorpusState {
     uae_u32 ssp = 0;
     uae_u16 sr = 0;
     uae_u32 pc = 0;
+    std::vector<std::pair<uae_u32, uae_u8>> memory;
 };
 
 struct CorpusVector {
@@ -584,11 +587,39 @@ static bool parse_corpus_state(const std::string &object, CorpusState &state)
             return false;
         state.a[i] = value;
     }
-    return json_u32(object, "usp", state.usp) &&
+    if (json_u32(object, "usp", state.usp) &&
         json_u32(object, "ssp", state.ssp) &&
         json_u32(object, "sr", value) &&
         (state.sr = static_cast<uae_u16>(value), true) &&
-        json_u32(object, "pc", state.pc);
+        json_u32(object, "pc", state.pc)) {
+        const std::string marker = "\"ram\":[";
+        const size_t start = object.find(marker);
+        const size_t end = start == std::string::npos
+            ? std::string::npos : object.find("]]", start + marker.size());
+        if (start == std::string::npos || end == std::string::npos)
+            return false;
+        size_t cursor = start + marker.size();
+        while (cursor < end) {
+            const size_t open = object.find('[', cursor);
+            if (open == std::string::npos || open >= end)
+                break;
+            const size_t comma = object.find(',', open + 1);
+            const size_t close = object.find(']', comma + 1);
+            if (comma == std::string::npos || close == std::string::npos || close > end)
+                return false;
+            const unsigned long address = std::strtoul(
+                object.c_str() + open + 1, nullptr, 10);
+            const unsigned long byte = std::strtoul(
+                object.c_str() + comma + 1, nullptr, 10);
+            if (address > 0xfffffffful || byte > 0xff)
+                return false;
+            state.memory.emplace_back(static_cast<uae_u32>(address),
+                static_cast<uae_u8>(byte));
+            cursor = close + 1;
+        }
+        return true;
+    }
+    return false;
 }
 
 static bool parse_corpus_vector(const std::string &line, CorpusVector &vector)
@@ -616,15 +647,27 @@ static bool parse_corpus_vector(const std::string &line, CorpusVector &vector)
     return true;
 }
 
-static void prepare_corpus_vector(const CorpusVector &vector, bool jit)
+static bool prepare_corpus_vector(const CorpusVector &vector, bool jit)
 {
     guest_memory.fill(0);
     const uaecptr pc = vector.initial.pc;
+    const uae_u32 instruction_length = vector.expected.pc - vector.initial.pc;
+    if (vector.expected.pc < vector.initial.pc ||
+        instruction_length < 2 || instruction_length > 4 ||
+        pc + instruction_length + 2 >= guest_memory.size())
+        return false;
+    for (const auto &cell : vector.initial.memory) {
+        if (cell.first >= guest_memory.size())
+            return false;
+        guest_memory[cell.first] = cell.second;
+    }
     write_word(guest_memory.data() + pc, 0, vector.opcode);
-    /* The first adapter milestone executes single-word instructions. The
-       second prefetched word is retained in the vector for the upcoming
-       extension-word runner, but must not execute as a second instruction. */
-    write_word(guest_memory.data() + pc, 2, M68K_EXEC_RETURN);
+    if (instruction_length == 2)
+        write_word(guest_memory.data() + pc, 2, M68K_EXEC_RETURN);
+    else {
+        write_word(guest_memory.data() + pc, 2, vector.next_word);
+        write_word(guest_memory.data() + pc, instruction_length, M68K_EXEC_RETURN);
+    }
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
@@ -649,12 +692,13 @@ static void prepare_corpus_vector(const CorpusVector &vector, bool jit)
     m68k_setpc(pc);
     MakeFromSR();
     regs.spcflags = 0;
+    return true;
 }
 
 static bool corpus_snapshot_matches(const CorpusVector &vector,
     const CpuSnapshot &snapshot)
 {
-    return snapshot.d == vector.expected.d &&
+    if (!(snapshot.d == vector.expected.d &&
         snapshot.a[0] == vector.expected.a[0] &&
         snapshot.a[1] == vector.expected.a[1] &&
         snapshot.a[2] == vector.expected.a[2] &&
@@ -663,7 +707,17 @@ static bool corpus_snapshot_matches(const CorpusVector &vector,
         snapshot.a[5] == vector.expected.a[5] &&
         snapshot.a[6] == vector.expected.a[6] &&
         snapshot.pc == vector.expected.pc &&
-        (snapshot.sr & 0x1fff) == (vector.expected.sr & 0x1fff);
+        (snapshot.sr & 0x1fff) == (vector.expected.sr & 0x1fff)))
+        return false;
+    for (const auto &cell : vector.expected.memory) {
+        const uae_u32 instruction_length = vector.expected.pc - vector.initial.pc;
+        if (cell.first >= vector.initial.pc &&
+            cell.first < vector.initial.pc + instruction_length + 2)
+            continue; /* excludes the temporary M68K_EXEC_RETURN sentinel */
+        if (cell.first >= guest_memory.size() || get_byte(cell.first) != cell.second)
+            return false;
+    }
+    return true;
 }
 
 static CpuSnapshot capture_corpus_snapshot()
@@ -697,16 +751,24 @@ static bool run_external_corpus(const char *path)
             continue;
         }
         if ((vector.initial.pc & 1) != 0 ||
-            vector.initial.pc + 6 >= guest_memory.size()) {
+            vector.initial.pc + 6 >= guest_memory.size() ||
+            vector.expected.pc < vector.initial.pc ||
+            vector.expected.pc - vector.initial.pc > 4) {
             skipped++;
             continue;
         }
         total++;
-        prepare_corpus_vector(vector, false);
+        if (!prepare_corpus_vector(vector, false)) {
+            skipped++;
+            continue;
+        }
         m68k_do_execute();
         MakeSR();
         const CpuSnapshot interpreter = capture_corpus_snapshot();
-        prepare_corpus_vector(vector, true);
+        if (!prepare_corpus_vector(vector, true)) {
+            skipped++;
+            continue;
+        }
         m68k_compile_execute();
         MakeSR();
         const CpuSnapshot jit = capture_corpus_snapshot();
