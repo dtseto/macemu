@@ -16,7 +16,15 @@ The passing probe validates:
 - differential comparison of D0, PC, and SR between both paths;
 - bounded termination through the production `M68K_EXEC_RETURN` emulation opcode.
 
-The current program installs `MOVEQ #5,D0` followed by `M68K_EXEC_RETURN` at guest address `0x1000`. It runs the fixture once through `m68k_do_execute` and once through `m68k_compile_execute`, then compares D0, PC, and SR. A successful run ends with:
+The current program installs five bounded programs at separate guest addresses:
+
+- `MOVEQ #5,D0`;
+- `ADDI.L #1,D0`;
+- `SUBI.L #1,D0`;
+- `ANDI.L #$0f0f0f0f,D0`;
+- `ORI.L #$0f0f0f0f,D0`.
+
+Each program is run through `m68k_do_execute` and `m68k_compile_execute`. The harness compares all D registers, all A registers, PC, and SR, and also checks the expected D0 result and retired PC. A successful run ends with:
 
 ```
 UAE_CPU_INTERPRETER_PASS
