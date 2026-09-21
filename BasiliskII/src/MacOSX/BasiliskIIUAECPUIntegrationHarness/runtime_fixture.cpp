@@ -66,7 +66,13 @@ void cpu_do_check_ticks(void)
     emulated_ticks = 1000;
 }
 
-void EmulOp(uint16, M68kRegisters *) {}
+extern int quit_program;
+
+void EmulOp(uint16 opcode, M68kRegisters *)
+{
+    if (opcode == M68K_EXEC_RETURN)
+        quit_program = 1;
+}
 
 void *vm_acquire(size_t size, int)
 {

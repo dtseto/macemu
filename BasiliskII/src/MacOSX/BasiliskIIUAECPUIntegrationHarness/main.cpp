@@ -16,41 +16,56 @@ extern uae_u8 *fast_ram_base;
 extern uae_u32 fast_ram_size;
 extern uae_u32 RAMSize;
 
-static bool run_interpreter_moveq()
-{
-    std::array<uae_u8, 4096> memory{};
-    memory[0] = 0x70;
-    memory[1] = 0x05;
+static constexpr uaecptr guest_code_offset = 0x1000;
+static std::array<uae_u8, 65536> guest_memory;
 
-    MEMBaseDiff = reinterpret_cast<uintptr>(memory.data());
-    fast_ram_base = memory.data();
-    fast_ram_size = static_cast<uae_u32>(memory.size());
+struct CpuSnapshot {
+    uae_u32 d0;
+    uae_u32 pc;
+    uae_u16 sr;
+};
+
+static CpuSnapshot run_moveq(bool jit)
+{
+    guest_memory.fill(0);
+    guest_memory[guest_code_offset + 0] = 0x70;
+    guest_memory[guest_code_offset + 1] = 0x05;
+    guest_memory[guest_code_offset + 2] = 0x71;
+    guest_memory[guest_code_offset + 3] = 0x00;
+
+    MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
+    fast_ram_base = guest_memory.data();
+    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
     RAMSize = fast_ram_size;
-    UseJIT = false;
+    UseJIT = jit;
     quit_program = 0;
 
     regs = {};
     regs.sr = 0x2700;
-    regs.pc = 0;
-    regs.pc_p = memory.data();
-    regs.pc_oldp = memory.data();
-    regs.fault_pc = 0;
+    m68k_setpc(guest_code_offset);
     MakeFromSR();
-    regs.spcflags = SPCFLAG_BRK;
+    regs.spcflags = jit ? 0 : SPCFLAG_BRK;
 
-    m68k_do_execute();
+    if (jit)
+        m68k_compile_execute();
+    else
+        m68k_do_execute();
 
     MakeSR();
-    const uae_u32 pc = m68k_getpc();
-    const bool correct = regs.regs[0] == 5 &&
-        pc == 2 &&
-        (regs.sr & 0x0004) == 0 &&
-        (regs.sr & 0x0002) == 0;
+    return { regs.regs[0], m68k_getpc(), regs.sr };
+}
 
-    std::printf("UAE_CPU_INTERPRETER_MOVEQ d0=%08x pc=%08x sr=%04x\n",
-        static_cast<unsigned>(regs.regs[0]),
-        static_cast<unsigned>(pc),
-        static_cast<unsigned>(regs.sr));
+static bool run_jit_moveq(const CpuSnapshot &interpreter)
+{
+    const CpuSnapshot snapshot = run_moveq(true);
+    const bool correct = snapshot.d0 == interpreter.d0 &&
+        snapshot.pc == interpreter.pc &&
+        snapshot.sr == interpreter.sr;
+
+    std::printf("UAE_CPU_JIT_MOVEQ d0=%08x pc=%08x sr=%04x\n",
+        static_cast<unsigned>(snapshot.d0),
+        static_cast<unsigned>(snapshot.pc),
+        static_cast<unsigned>(snapshot.sr));
     return correct;
 }
 
@@ -62,12 +77,34 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const bool interpreter_pass = run_interpreter_moveq();
+    const CpuSnapshot interpreter = run_moveq(false);
+    const bool interpreter_pass = interpreter.d0 == 5 &&
+        interpreter.pc == guest_code_offset + 2 &&
+        (interpreter.sr & 0x001f) == 0;
+    std::printf("UAE_CPU_INTERPRETER_MOVEQ d0=%08x pc=%08x sr=%04x\n",
+        static_cast<unsigned>(interpreter.d0),
+        static_cast<unsigned>(interpreter.pc),
+        static_cast<unsigned>(interpreter.sr));
     std::printf("UAE_CPU_INTERPRETER_%s\n", interpreter_pass ? "PASS" : "FAIL");
+
+    if (!interpreter_pass) {
+        exit_m68k();
+        return 1;
+    }
+
+    m68k_setpc(guest_code_offset);
+    MakeFromSR();
+    regs.spcflags = SPCFLAG_BRK;
+    quit_program = 1;
+
+    compiler_init();
+    const bool jit_pass = run_jit_moveq(interpreter);
+    std::printf("UAE_CPU_JIT_%s\n", jit_pass ? "PASS" : "FAIL");
+    compiler_exit();
 
     exit_m68k();
 
-    if (!interpreter_pass)
+    if (!jit_pass)
         return 1;
 
     std::printf("UAE_CPU_INTEGRATION_PASS\n");

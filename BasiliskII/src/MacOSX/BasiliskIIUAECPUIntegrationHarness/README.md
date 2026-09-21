@@ -11,12 +11,16 @@ The passing probe validates:
 - static linking of the ARM64 UAE CPU archive;
 - MPFR/GMP FPU dependencies;
 - runtime-service resolution for mutexes, preferences, interrupts, timing, VM allocation, and emulation-op dispatch;
-- execution of one real interpreter instruction from a bounded guest-memory buffer.
+- execution of one real instruction through the interpreter;
+- execution of the identical instruction stream through the production ARM64 JIT;
+- differential comparison of D0, PC, and SR between both paths;
+- bounded termination through the production `M68K_EXEC_RETURN` emulation opcode.
 
-The current program installs `MOVEQ #5,D0` at guest address zero, executes it through `m68k_do_execute`, and checks D0, PC, and CCR. A successful run ends with:
+The current program installs `MOVEQ #5,D0` followed by `M68K_EXEC_RETURN` at guest address `0x1000`. It runs the fixture once through `m68k_do_execute` and once through `m68k_compile_execute`, then compares D0, PC, and SR. A successful run ends with:
 
 ```
 UAE_CPU_INTERPRETER_PASS
+UAE_CPU_JIT_PASS
 UAE_CPU_INTEGRATION_PASS
 ```
 
