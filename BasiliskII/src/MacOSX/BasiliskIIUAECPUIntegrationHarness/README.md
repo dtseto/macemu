@@ -26,7 +26,8 @@ The current program installs five bounded programs at separate guest addresses:
 - `MOVE.L D0,(A0)`;
 - `MOVE.L (A0),D0`;
 - `MOVE.L (A0)+,D0`.
-- a taken `BEQ.S` over a skipped instruction.
+- taken and not-taken `BEQ.S` cases;
+- an unconditional `BRA.S` over a skipped instruction.
 
 Each program is run through `m68k_do_execute` and `m68k_compile_execute`. The interpreter now runs to the explicit sentinel for multi-instruction cases. The harness compares all D registers, all A registers, PC, SR, and the guest data word, and also checks the expected D0 result, A0 result, memory result, and retired PC. A successful run ends with:
 
