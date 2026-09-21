@@ -23,6 +23,9 @@ static constexpr uaecptr guest_data_offset = 0x2000;
 static constexpr uaecptr trap_code_offset = 0x1800;
 static constexpr uaecptr trap_handler_offset = 0x3000;
 static constexpr uaecptr trap_stack_offset = 0x4000;
+static constexpr uaecptr subroutine_code_offset = 0x2600;
+static constexpr uaecptr subroutine_handler_offset = 0x2800;
+static constexpr uaecptr subroutine_stack_offset = 0x5000;
 static std::array<uae_u8, 65536> guest_memory;
 
 struct CpuSnapshot {
@@ -288,6 +291,41 @@ static CpuSnapshot run_trap_case(bool jit)
     return capture_snapshot();
 }
 
+static CpuSnapshot run_subroutine_case(bool jit)
+{
+    guest_memory.fill(0);
+    write_word(guest_memory.data() + subroutine_code_offset, 0, 0x4eb9);
+    write_long(guest_memory.data() + subroutine_code_offset, 2, subroutine_handler_offset);
+    write_word(guest_memory.data() + subroutine_code_offset, 6, M68K_EXEC_RETURN);
+    write_word(guest_memory.data() + subroutine_handler_offset, 0, 0x7007);
+    write_word(guest_memory.data() + subroutine_handler_offset, 2, 0x4e75);
+
+    MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
+    fast_ram_base = guest_memory.data();
+    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    RAMSize = fast_ram_size;
+    UseJIT = jit;
+    quit_program = 0;
+
+    regs = {};
+    regs.sr = 0x2700;
+    regs.usp = subroutine_stack_offset;
+    regs.isp = subroutine_stack_offset;
+    regs.msp = subroutine_stack_offset;
+    m68k_areg(regs, 7) = subroutine_stack_offset;
+    m68k_setpc(subroutine_code_offset);
+    MakeFromSR();
+    regs.spcflags = 0;
+
+    if (jit)
+        m68k_compile_execute();
+    else
+        m68k_do_execute();
+
+    MakeSR();
+    return capture_snapshot();
+}
+
 static bool snapshots_match(const TestCase &test_case,
     const CpuSnapshot &interpreter, const CpuSnapshot &jit)
 {
@@ -394,6 +432,27 @@ int main()
         static_cast<unsigned>(trap_interpreter.sr),
         static_cast<unsigned>(trap_jit.sr),
         trap_pass ? "PASS" : "FAIL");
+
+    const CpuSnapshot subroutine_interpreter = run_subroutine_case(false);
+    const CpuSnapshot subroutine_jit = run_subroutine_case(true);
+    const bool subroutine_pass = subroutine_interpreter.d == subroutine_jit.d &&
+        subroutine_interpreter.a == subroutine_jit.a &&
+        subroutine_interpreter.pc == subroutine_jit.pc &&
+        subroutine_interpreter.sr == subroutine_jit.sr &&
+        subroutine_interpreter.d[0] == 7 &&
+        subroutine_interpreter.a[7] == subroutine_stack_offset &&
+        subroutine_interpreter.pc == subroutine_code_offset + 6;
+    all_pass = all_pass && subroutine_pass;
+    std::printf("UAE_CPU_CASE_JSR_RTS interp_d0=%08x jit_d0=%08x interp_a7=%08x jit_a7=%08x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
+        static_cast<unsigned>(subroutine_interpreter.d[0]),
+        static_cast<unsigned>(subroutine_jit.d[0]),
+        static_cast<unsigned>(subroutine_interpreter.a[7]),
+        static_cast<unsigned>(subroutine_jit.a[7]),
+        static_cast<unsigned>(subroutine_interpreter.pc),
+        static_cast<unsigned>(subroutine_jit.pc),
+        static_cast<unsigned>(subroutine_interpreter.sr),
+        static_cast<unsigned>(subroutine_jit.sr),
+        subroutine_pass ? "PASS" : "FAIL");
 
     const bool jit_pass = all_pass;
     std::printf("UAE_CPU_JIT_%s\n", jit_pass ? "PASS" : "FAIL");
