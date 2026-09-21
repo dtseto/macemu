@@ -31,6 +31,9 @@ struct CpuSnapshot {
     uae_u32 pc;
     uae_u16 sr;
     uae_u32 data_value;
+    uae_u16 stack_sr;
+    uae_u32 stack_pc;
+    uae_u16 stack_format;
 };
 
 struct TestCase {
@@ -178,6 +181,9 @@ static CpuSnapshot capture_snapshot()
     snapshot.pc = m68k_getpc();
     snapshot.sr = regs.sr;
     snapshot.data_value = get_long(guest_data_offset);
+    snapshot.stack_sr = get_word(m68k_areg(regs, 7));
+    snapshot.stack_pc = get_long(m68k_areg(regs, 7) + 2);
+    snapshot.stack_format = get_word(m68k_areg(regs, 7) + 6);
     return snapshot;
 }
 
@@ -328,14 +334,23 @@ int main()
         trap_interpreter.a == trap_jit.a &&
         trap_interpreter.pc == trap_jit.pc &&
         trap_interpreter.sr == trap_jit.sr &&
+        trap_interpreter.stack_sr == trap_jit.stack_sr &&
+        trap_interpreter.stack_pc == trap_jit.stack_pc &&
+        trap_interpreter.stack_format == trap_jit.stack_format &&
         trap_interpreter.d[0] == 7 &&
         trap_interpreter.pc == trap_handler_offset + 2;
     all_pass = all_pass && trap_pass;
-    std::printf("UAE_CPU_CASE_TRAP_VECTOR interp_d0=%08x jit_d0=%08x interp_a7=%08x jit_a7=%08x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
+    std::printf("UAE_CPU_CASE_TRAP_VECTOR interp_d0=%08x jit_d0=%08x interp_a7=%08x jit_a7=%08x interp_frame=%04x:%08x:%04x jit_frame=%04x:%08x:%04x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
         static_cast<unsigned>(trap_interpreter.d[0]),
         static_cast<unsigned>(trap_jit.d[0]),
         static_cast<unsigned>(trap_interpreter.a[7]),
         static_cast<unsigned>(trap_jit.a[7]),
+        static_cast<unsigned>(trap_interpreter.stack_sr),
+        static_cast<unsigned>(trap_interpreter.stack_pc),
+        static_cast<unsigned>(trap_interpreter.stack_format),
+        static_cast<unsigned>(trap_jit.stack_sr),
+        static_cast<unsigned>(trap_jit.stack_pc),
+        static_cast<unsigned>(trap_jit.stack_format),
         static_cast<unsigned>(trap_interpreter.pc),
         static_cast<unsigned>(trap_jit.pc),
         static_cast<unsigned>(trap_interpreter.sr),
