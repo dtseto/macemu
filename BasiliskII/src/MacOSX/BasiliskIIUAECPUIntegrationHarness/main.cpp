@@ -199,6 +199,18 @@ static void emit_store_byte(uae_u8 *code)
     write_word(code, 2, M68K_EXEC_RETURN);
 }
 
+static void emit_store_word(uae_u8 *code)
+{
+    write_word(code, 0, 0x3080);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_load_byte(uae_u8 *code)
+{
+    write_word(code, 0, 0x1010);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
 static void emit_decrement_loop(uae_u8 *code)
 {
     write_word(code, 0, 0x7003);
@@ -449,7 +461,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 36> test_cases = {{
+    const std::array<TestCase, 38> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -475,6 +487,8 @@ int main()
         {"MOVE.B_IMMEDIATE", guest_code_offset + 0x1c80, 0x12345600, 0x123456ff, 0, 0, 0, 0, 4, emit_move_immediate_byte, 0x001f, 0x0008},
         {"MOVE.W_IMMEDIATE", guest_code_offset + 0x1d00, 0x12340000, 0x12348000, 0, 0, 0, 0, 4, emit_move_immediate_word, 0x001f, 0x0008},
         {"STORE.B", guest_code_offset + 0x1d80, 0x123456ab, 0x123456ab, guest_data_offset, guest_data_offset, 0, 0xab000000, 2, emit_store_byte},
+        {"STORE.W", guest_code_offset + 0x1e00, 0x1234abcd, 0x1234abcd, guest_data_offset, guest_data_offset, 0, 0xabcd0000, 2, emit_store_word},
+        {"LOAD.B", guest_code_offset + 0x1e80, 0x12345600, 0x12345680, guest_data_offset, guest_data_offset, 0x80000000, 0x80000000, 2, emit_load_byte, 0x001f, 0x0008},
         {"BEQ_TAKEN", guest_code_offset + 0x800, 0, 0, 0, 0, 0, 0, 6, emit_beq_taken},
         {"BEQ_NOT_TAKEN", guest_code_offset + 0x900, 0, 2, 0, 0, 0, 0, 6, emit_beq_not_taken},
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},
