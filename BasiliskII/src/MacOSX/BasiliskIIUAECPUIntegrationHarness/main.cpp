@@ -35,7 +35,20 @@ static constexpr uaecptr subroutine_handler_offset = 0x2800;
 static constexpr uaecptr subroutine_stack_offset = 0x5000;
 static constexpr uaecptr loop_code_offset = 0x2a00;
 static constexpr uaecptr generated_code_offset = 0x6000;
-static std::array<uae_u8, 2 * 1024 * 1024> guest_memory;
+static constexpr size_t fixture_memory_size = 2 * 1024 * 1024;
+static constexpr size_t corpus_memory_size = 16 * 1024 * 1024;
+static std::array<uae_u8, corpus_memory_size> guest_memory;
+static size_t active_memory_size = fixture_memory_size;
+
+static void select_guest_memory(size_t size)
+{
+    active_memory_size = size;
+}
+
+static void clear_guest_memory()
+{
+    std::fill(guest_memory.begin(), guest_memory.begin() + active_memory_size, 0);
+}
 
 struct CpuSnapshot {
     std::array<uae_u32, 8> d;
@@ -341,13 +354,14 @@ static CpuSnapshot capture_snapshot()
 
 static void prepare_case(const TestCase &test_case, bool jit)
 {
-    guest_memory.fill(0);
+    select_guest_memory(fixture_memory_size);
+    clear_guest_memory();
     write_long(guest_memory.data(), guest_data_offset, test_case.data_value);
     test_case.emit(guest_memory.data() + test_case.offset);
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
-    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    fast_ram_size = static_cast<uae_u32>(active_memory_size);
     RAMSize = fast_ram_size;
     UseJIT = jit;
     quit_program = 0;
@@ -378,7 +392,8 @@ static CpuSnapshot run_case(const TestCase &test_case, bool jit)
 static CpuSnapshot run_generated_case(bool jit, uaecptr offset,
     uae_u32 seed, uae_u32 add_value, uae_u32 xor_value, uae_u32 and_value)
 {
-    guest_memory.fill(0);
+    select_guest_memory(fixture_memory_size);
+    clear_guest_memory();
     uae_u8 *code = guest_memory.data() + offset;
     write_word(code, 0, 0x203c);
     write_long(code, 2, seed);
@@ -392,7 +407,7 @@ static CpuSnapshot run_generated_case(bool jit, uaecptr offset,
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
-    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    fast_ram_size = static_cast<uae_u32>(active_memory_size);
     RAMSize = fast_ram_size;
     UseJIT = jit;
     quit_program = 0;
@@ -414,7 +429,8 @@ static CpuSnapshot run_generated_case(bool jit, uaecptr offset,
 
 static CpuSnapshot run_trap_case(bool jit)
 {
-    guest_memory.fill(0);
+    select_guest_memory(fixture_memory_size);
+    clear_guest_memory();
     write_long(guest_memory.data(), 4 * 32, trap_handler_offset);
     write_word(guest_memory.data() + trap_code_offset, 0, 0x4e40);
     write_word(guest_memory.data() + trap_code_offset, 2, M68K_EXEC_RETURN);
@@ -423,7 +439,7 @@ static CpuSnapshot run_trap_case(bool jit)
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
-    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    fast_ram_size = static_cast<uae_u32>(active_memory_size);
     RAMSize = fast_ram_size;
     UseJIT = jit;
     quit_program = 0;
@@ -450,7 +466,8 @@ static CpuSnapshot run_trap_case(bool jit)
 
 static CpuSnapshot run_subroutine_case(bool jit)
 {
-    guest_memory.fill(0);
+    select_guest_memory(fixture_memory_size);
+    clear_guest_memory();
     write_word(guest_memory.data() + subroutine_code_offset, 0, 0x4eb9);
     write_long(guest_memory.data() + subroutine_code_offset, 2, subroutine_handler_offset);
     write_word(guest_memory.data() + subroutine_code_offset, 6, M68K_EXEC_RETURN);
@@ -459,7 +476,7 @@ static CpuSnapshot run_subroutine_case(bool jit)
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
-    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    fast_ram_size = static_cast<uae_u32>(active_memory_size);
     RAMSize = fast_ram_size;
     UseJIT = jit;
     quit_program = 0;
@@ -485,12 +502,13 @@ static CpuSnapshot run_subroutine_case(bool jit)
 
 static CpuSnapshot run_loop_case(bool jit)
 {
-    guest_memory.fill(0);
+    select_guest_memory(fixture_memory_size);
+    clear_guest_memory();
     emit_decrement_loop(guest_memory.data() + loop_code_offset);
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
-    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    fast_ram_size = static_cast<uae_u32>(active_memory_size);
     RAMSize = fast_ram_size;
     UseJIT = jit;
     quit_program = 0;
@@ -649,15 +667,16 @@ static bool parse_corpus_vector(const std::string &line, CorpusVector &vector)
 
 static bool prepare_corpus_vector(const CorpusVector &vector, bool jit)
 {
-    guest_memory.fill(0);
+    select_guest_memory(corpus_memory_size);
+    clear_guest_memory();
     const uaecptr pc = vector.initial.pc;
     const uae_u32 instruction_length = vector.expected.pc - vector.initial.pc;
     if (vector.expected.pc < vector.initial.pc ||
         instruction_length < 2 || instruction_length > 4 ||
-        pc + instruction_length + 2 >= guest_memory.size())
+        pc + instruction_length + 2 >= active_memory_size)
         return false;
     for (const auto &cell : vector.initial.memory) {
-        if (cell.first >= guest_memory.size())
+        if (cell.first >= active_memory_size)
             return false;
         guest_memory[cell.first] = cell.second;
     }
@@ -671,7 +690,7 @@ static bool prepare_corpus_vector(const CorpusVector &vector, bool jit)
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
-    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    fast_ram_size = static_cast<uae_u32>(active_memory_size);
     RAMSize = fast_ram_size;
     UseJIT = jit;
     quit_program = 0;
@@ -714,7 +733,7 @@ static bool corpus_snapshot_matches(const CorpusVector &vector,
         if (cell.first >= vector.initial.pc &&
             cell.first < vector.initial.pc + instruction_length + 2)
             continue; /* excludes the temporary M68K_EXEC_RETURN sentinel */
-        if (cell.first >= guest_memory.size() || get_byte(cell.first) != cell.second)
+        if (cell.first >= active_memory_size || get_byte(cell.first) != cell.second)
             return false;
     }
     return true;
@@ -751,9 +770,28 @@ static bool run_external_corpus(const char *path)
             continue;
         }
         if ((vector.initial.pc & 1) != 0 ||
-            vector.initial.pc + 6 >= guest_memory.size() ||
+            vector.initial.pc + 6 >= corpus_memory_size ||
             vector.expected.pc < vector.initial.pc ||
             vector.expected.pc - vector.initial.pc > 4) {
+            skipped++;
+            continue;
+        }
+        const bool register_only = vector.name.find(" NOP ") != std::string::npos ||
+            vector.name.find(" SWAP ") != std::string::npos ||
+            vector.name.find(" EXT.") != std::string::npos;
+        bool address_space_safe = register_only ||
+            (vector.initial.usp < corpus_memory_size &&
+             vector.initial.ssp < corpus_memory_size);
+        if (!register_only) {
+            for (unsigned i = 0; i < 7; i++)
+                address_space_safe = address_space_safe &&
+                    vector.initial.a[i] < corpus_memory_size;
+        }
+        for (const auto &cell : vector.initial.memory)
+            address_space_safe = address_space_safe && cell.first < corpus_memory_size;
+        for (const auto &cell : vector.expected.memory)
+            address_space_safe = address_space_safe && cell.first < corpus_memory_size;
+        if (!address_space_safe) {
             skipped++;
             continue;
         }
@@ -801,7 +839,8 @@ static bool run_cache_pressure(unsigned count)
     if (pressure_limit + 32 >= guest_memory.size() || count > 12000)
         return false;
 
-    guest_memory.fill(0);
+    select_guest_memory(fixture_memory_size);
+    clear_guest_memory();
     for (unsigned i = 0; i < count; i++) {
         uaecptr offset = pressure_base + pressure_stride * i;
         uae_u8 *code = guest_memory.data() + offset;
@@ -811,7 +850,7 @@ static bool run_cache_pressure(unsigned count)
 
     MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
     fast_ram_base = guest_memory.data();
-    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    fast_ram_size = static_cast<uae_u32>(active_memory_size);
     RAMSize = fast_ram_size;
     UseJIT = true;
 

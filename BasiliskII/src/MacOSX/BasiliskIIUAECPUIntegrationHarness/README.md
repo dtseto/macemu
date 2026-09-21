@@ -92,15 +92,17 @@ the interpreter and once through the production JIT, and compares all data
 registers, address registers, PC, and condition-code/int-mask bits. Because
 `M68K_EXEC_RETURN` is a privileged test sentinel, corpus vectors execute with
 the S bit synthesized and the comparison masks only that synthetic bit. The
-runner currently skips odd or out-of-range PCs, instructions longer than one
-prefetch extension word, and vectors whose effective-address setup cannot fit
-the bounded fixture. Those vectors are reported explicitly. Sparse initial
-and final RAM is now replayed and checked for supported vectors.
+runner uses a 2 MB fixture for the normal integration/benchmark path and a
+16 MB fixture for corpus mode. It currently skips odd or out-of-range PCs,
+instructions longer than one prefetch extension word, and address-heavy
+vectors whose effective-address setup cannot be proven safe without decoding
+the addressing mode. Those vectors are reported explicitly. Sparse initial
+and final RAM is replayed and checked for supported vectors.
 
 Example result from 400 mixed NOP/SWAP/EXT vectors:
 
 ```
-UAE_CPU_CORPUS_RESULT total=50 passed=50 skipped=350 malformed=0 PASS
+UAE_CPU_CORPUS_RESULT total=400 passed=400 skipped=0 malformed=0 PASS
 ```
 
 ```
