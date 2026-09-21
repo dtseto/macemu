@@ -39,6 +39,7 @@ The current program installs five bounded programs at separate guest addresses:
 - byte-width memory store with explicit big-endian memory validation.
 - word-width memory store and byte-width load with upper-bit preservation.
 - PC-relative long load from a literal embedded after the instruction stream.
+- indexed `d8(A0,D1)` long load.
 - taken and not-taken `BEQ.S` cases;
 - an unconditional `BRA.S` over a skipped instruction.
 - `MOVE.L d16(A0),D0`;
