@@ -362,7 +362,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 24> test_cases = {{
+    const std::array<TestCase, 28> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -376,6 +376,10 @@ int main()
         {"ADDI_MINUS_ONE", guest_code_offset + 0x1600, 0, 0xffffffff, 0, 0, 0, 0, 6, emit_addi_minus_one, 0x001f, 0x0008},
         {"SUBI_BORROW", guest_code_offset + 0x1700, 0, 0xffffffff, 0, 0, 0, 0, 6, emit_subi, 0x001f, 0x0019},
         {"MOVEQ_SIGN_EXTEND", guest_code_offset + 0x1780, 0, 0xffffffff, 0, 0, 0, 0, 2, emit_moveq_minus_one, 0x001f, 0x0008},
+        {"ADDI_WRAP_TO_ZERO", guest_code_offset + 0x1800, 0xffffffff, 0, 0, 0, 0, 0, 6, emit_addi, 0x001f, 0x0015},
+        {"ANDI_MIXED_BITS", guest_code_offset + 0x1880, 0x12345678, 0x02040608, 0, 0, 0, 0, 6, emit_andi, 0x001f, 0x0000},
+        {"ORI_FROM_ZERO", guest_code_offset + 0x1900, 0, 0x0f0f0f0f, 0, 0, 0, 0, 6, emit_ori, 0x001f, 0x0000},
+        {"SUBI_FROM_ZERO", guest_code_offset + 0x1980, 0, 0xffffffff, 0, 0, 0, 0, 6, emit_subi, 0x001f, 0x0019},
         {"BEQ_TAKEN", guest_code_offset + 0x800, 0, 0, 0, 0, 0, 0, 6, emit_beq_taken},
         {"BEQ_NOT_TAKEN", guest_code_offset + 0x900, 0, 2, 0, 0, 0, 0, 6, emit_beq_not_taken},
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},
