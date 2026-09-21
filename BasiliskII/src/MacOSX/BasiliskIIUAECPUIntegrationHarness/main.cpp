@@ -20,6 +20,9 @@ extern uae_u32 RAMSize;
 
 static constexpr uaecptr guest_code_offset = 0x1000;
 static constexpr uaecptr guest_data_offset = 0x2000;
+static constexpr uaecptr trap_code_offset = 0x1800;
+static constexpr uaecptr trap_handler_offset = 0x3000;
+static constexpr uaecptr trap_stack_offset = 0x4000;
 static std::array<uae_u8, 65536> guest_memory;
 
 struct CpuSnapshot {
@@ -213,6 +216,42 @@ static CpuSnapshot run_case(const TestCase &test_case, bool jit)
     return capture_snapshot();
 }
 
+static CpuSnapshot run_trap_case(bool jit)
+{
+    guest_memory.fill(0);
+    write_long(guest_memory.data(), 4 * 32, trap_handler_offset);
+    write_word(guest_memory.data() + trap_code_offset, 0, 0x4e40);
+    write_word(guest_memory.data() + trap_code_offset, 2, M68K_EXEC_RETURN);
+    write_word(guest_memory.data() + trap_handler_offset, 0, 0x7007);
+    write_word(guest_memory.data() + trap_handler_offset, 2, M68K_EXEC_RETURN);
+
+    MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
+    fast_ram_base = guest_memory.data();
+    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    RAMSize = fast_ram_size;
+    UseJIT = jit;
+    quit_program = 0;
+
+    regs = {};
+    regs.sr = 0x2700;
+    regs.vbr = 0;
+    regs.usp = trap_stack_offset;
+    regs.isp = trap_stack_offset;
+    regs.msp = trap_stack_offset;
+    m68k_areg(regs, 7) = trap_stack_offset;
+    m68k_setpc(trap_code_offset);
+    MakeFromSR();
+    regs.spcflags = 0;
+
+    if (jit)
+        m68k_compile_execute();
+    else
+        m68k_do_execute();
+
+    MakeSR();
+    return capture_snapshot();
+}
+
 static bool snapshots_match(const TestCase &test_case,
     const CpuSnapshot &interpreter, const CpuSnapshot &jit)
 {
@@ -282,6 +321,26 @@ int main()
             static_cast<unsigned>(jit.sr),
             test_pass ? "PASS" : "FAIL");
     }
+
+    const CpuSnapshot trap_interpreter = run_trap_case(false);
+    const CpuSnapshot trap_jit = run_trap_case(true);
+    const bool trap_pass = trap_interpreter.d == trap_jit.d &&
+        trap_interpreter.a == trap_jit.a &&
+        trap_interpreter.pc == trap_jit.pc &&
+        trap_interpreter.sr == trap_jit.sr &&
+        trap_interpreter.d[0] == 7 &&
+        trap_interpreter.pc == trap_handler_offset + 2;
+    all_pass = all_pass && trap_pass;
+    std::printf("UAE_CPU_CASE_TRAP_VECTOR interp_d0=%08x jit_d0=%08x interp_a7=%08x jit_a7=%08x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
+        static_cast<unsigned>(trap_interpreter.d[0]),
+        static_cast<unsigned>(trap_jit.d[0]),
+        static_cast<unsigned>(trap_interpreter.a[7]),
+        static_cast<unsigned>(trap_jit.a[7]),
+        static_cast<unsigned>(trap_interpreter.pc),
+        static_cast<unsigned>(trap_jit.pc),
+        static_cast<unsigned>(trap_interpreter.sr),
+        static_cast<unsigned>(trap_jit.sr),
+        trap_pass ? "PASS" : "FAIL");
 
     const bool jit_pass = all_pass;
     std::printf("UAE_CPU_JIT_%s\n", jit_pass ? "PASS" : "FAIL");
