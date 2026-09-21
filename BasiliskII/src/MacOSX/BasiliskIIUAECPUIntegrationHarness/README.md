@@ -99,7 +99,10 @@ vectors whose effective-address setup cannot be proven safe without decoding
 the addressing mode. In particular, indexed (`Xn`), A7-based, and high-address
 absolute-word (`xxx`) corpus forms are reported as skipped because they still
 cross known crash or stack-bank boundaries in the existing production JIT.
-Non-A7 predecrement (`-(An)`) and low-address absolute-word forms are now
+Indexed vectors also expose an ARM64 backend defect: 68000 word-indexed
+addressing must sign-extend the index register's low word, but representative
+corpus vectors currently mismatch or crash in the JIT. Non-A7 predecrement
+(`-(An)`) and low-address absolute-word forms are now
 exercised normally; absolute-long forms remain outside this fixture because
 they require more than one extension word. These are explicit coverage
 boundaries, not semantic passes. Sparse initial and final RAM is replayed and
