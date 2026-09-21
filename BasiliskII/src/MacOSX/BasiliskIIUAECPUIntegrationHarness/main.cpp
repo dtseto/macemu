@@ -213,7 +213,7 @@ static void emit_load_byte(uae_u8 *code)
 
 static void emit_decrement_loop(uae_u8 *code)
 {
-    write_word(code, 0, 0x7003);
+    write_word(code, 0, 0x707f);
     write_word(code, 2, 0x5380);
     write_word(code, 4, 0x66fc);
     write_word(code, 6, M68K_EXEC_RETURN);

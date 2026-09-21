@@ -32,7 +32,7 @@ The current program installs five bounded programs at separate guest addresses:
 - boundary-value `ADDI.L #-1` and `SUBI.L #1` borrow cases with explicit X/C expectations.
 - `MOVEQ #-1,D0` sign extension with explicit N flag expectation.
 - wraparound, mixed-bit, and zero-origin logical/arithmetic operand variants.
-- a repeated `SUBQ.L`/backward-`BNE.S` decrement loop.
+- a 127-iteration `SUBQ.L`/backward-`BNE.S` decrement loop.
 - `EXT.L` sign extension from a negative word and `SWAP` byte-order transformation.
 - unary `NEG.L`, `NOT.L`, and `TST.L` cases with explicit CCR expectations.
 - byte- and word-width immediate moves that preserve upper D0 bits.
