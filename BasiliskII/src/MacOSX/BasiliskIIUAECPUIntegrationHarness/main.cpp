@@ -26,6 +26,7 @@ static constexpr uaecptr trap_stack_offset = 0x4000;
 static constexpr uaecptr subroutine_code_offset = 0x2600;
 static constexpr uaecptr subroutine_handler_offset = 0x2800;
 static constexpr uaecptr subroutine_stack_offset = 0x5000;
+static constexpr uaecptr loop_code_offset = 0x2a00;
 static std::array<uae_u8, 65536> guest_memory;
 
 struct CpuSnapshot {
@@ -145,6 +146,14 @@ static void emit_moveq_minus_one(uae_u8 *code)
 {
     write_word(code, 0, 0x70ff);
     write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_decrement_loop(uae_u8 *code)
+{
+    write_word(code, 0, 0x7003);
+    write_word(code, 2, 0x5380);
+    write_word(code, 4, 0x66fc);
+    write_word(code, 6, M68K_EXEC_RETURN);
 }
 
 static void emit_beq_taken(uae_u8 *code)
@@ -339,6 +348,33 @@ static CpuSnapshot run_subroutine_case(bool jit)
     return capture_snapshot();
 }
 
+static CpuSnapshot run_loop_case(bool jit)
+{
+    guest_memory.fill(0);
+    emit_decrement_loop(guest_memory.data() + loop_code_offset);
+
+    MEMBaseDiff = reinterpret_cast<uintptr>(guest_memory.data());
+    fast_ram_base = guest_memory.data();
+    fast_ram_size = static_cast<uae_u32>(guest_memory.size());
+    RAMSize = fast_ram_size;
+    UseJIT = jit;
+    quit_program = 0;
+
+    regs = {};
+    regs.sr = 0x2700;
+    m68k_setpc(loop_code_offset);
+    MakeFromSR();
+    regs.spcflags = 0;
+
+    if (jit)
+        m68k_compile_execute();
+    else
+        m68k_do_execute();
+
+    MakeSR();
+    return capture_snapshot();
+}
+
 static bool snapshots_match(const TestCase &test_case,
     const CpuSnapshot &interpreter, const CpuSnapshot &jit)
 {
@@ -473,6 +509,24 @@ int main()
         static_cast<unsigned>(subroutine_interpreter.sr),
         static_cast<unsigned>(subroutine_jit.sr),
         subroutine_pass ? "PASS" : "FAIL");
+
+    const CpuSnapshot loop_interpreter = run_loop_case(false);
+    const CpuSnapshot loop_jit = run_loop_case(true);
+    const bool loop_pass = loop_interpreter.d == loop_jit.d &&
+        loop_interpreter.a == loop_jit.a &&
+        loop_interpreter.pc == loop_jit.pc &&
+        loop_interpreter.sr == loop_jit.sr &&
+        loop_interpreter.d[0] == 0 &&
+        loop_interpreter.pc == loop_code_offset + 6;
+    all_pass = all_pass && loop_pass;
+    std::printf("UAE_CPU_CASE_DECREMENT_LOOP interp_d0=%08x jit_d0=%08x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
+        static_cast<unsigned>(loop_interpreter.d[0]),
+        static_cast<unsigned>(loop_jit.d[0]),
+        static_cast<unsigned>(loop_interpreter.pc),
+        static_cast<unsigned>(loop_jit.pc),
+        static_cast<unsigned>(loop_interpreter.sr),
+        static_cast<unsigned>(loop_jit.sr),
+        loop_pass ? "PASS" : "FAIL");
 
     const bool jit_pass = all_pass;
     std::printf("UAE_CPU_JIT_%s\n", jit_pass ? "PASS" : "FAIL");
