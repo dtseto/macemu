@@ -160,6 +160,24 @@ static void emit_swap(uae_u8 *code)
     write_word(code, 2, M68K_EXEC_RETURN);
 }
 
+static void emit_neg_long(uae_u8 *code)
+{
+    write_word(code, 0, 0x4480);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_not_long(uae_u8 *code)
+{
+    write_word(code, 0, 0x4680);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
+static void emit_tst_long(uae_u8 *code)
+{
+    write_word(code, 0, 0x4a80);
+    write_word(code, 2, M68K_EXEC_RETURN);
+}
+
 static void emit_decrement_loop(uae_u8 *code)
 {
     write_word(code, 0, 0x7003);
@@ -410,7 +428,7 @@ int main()
     init_m68k();
     std::printf("UAE_CPU_RUNTIME_FIXTURE_LINKED\n");
 
-    const std::array<TestCase, 30> test_cases = {{
+    const std::array<TestCase, 33> test_cases = {{
         {"MOVEQ", guest_code_offset, 0, 5, 0, 0, 0, 0, 2, emit_moveq},
         {"ADDI.L", guest_code_offset + 0x100, 5, 6, 0, 0, 0, 0, 6, emit_addi},
         {"SUBI.L", guest_code_offset + 0x200, 5, 4, 0, 0, 0, 0, 6, emit_subi},
@@ -430,6 +448,9 @@ int main()
         {"SUBI_FROM_ZERO", guest_code_offset + 0x1980, 0, 0xffffffff, 0, 0, 0, 0, 6, emit_subi, 0x001f, 0x0019},
         {"EXT.L_SIGN_EXTEND", guest_code_offset + 0x1a00, 0x00008000, 0xffff8000, 0, 0, 0, 0, 2, emit_ext_long},
         {"SWAP", guest_code_offset + 0x1a80, 0x12345678, 0x56781234, 0, 0, 0, 0, 2, emit_swap},
+        {"NEG.L", guest_code_offset + 0x1b00, 1, 0xffffffff, 0, 0, 0, 0, 2, emit_neg_long, 0x001f, 0x0019},
+        {"NOT.L", guest_code_offset + 0x1b80, 0, 0xffffffff, 0, 0, 0, 0, 2, emit_not_long, 0x001f, 0x0008},
+        {"TST.L_ZERO", guest_code_offset + 0x1c00, 0, 0, 0, 0, 0, 0, 2, emit_tst_long, 0x001f, 0x0004},
         {"BEQ_TAKEN", guest_code_offset + 0x800, 0, 0, 0, 0, 0, 0, 6, emit_beq_taken},
         {"BEQ_NOT_TAKEN", guest_code_offset + 0x900, 0, 2, 0, 0, 0, 0, 6, emit_beq_not_taken},
         {"BRA_TAKEN", guest_code_offset + 0xa00, 0, 1, 0, 0, 0, 0, 6, emit_bra_taken},

@@ -34,6 +34,7 @@ The current program installs five bounded programs at separate guest addresses:
 - wraparound, mixed-bit, and zero-origin logical/arithmetic operand variants.
 - a repeated `SUBQ.L`/backward-`BNE.S` decrement loop.
 - `EXT.L` sign extension from a negative word and `SWAP` byte-order transformation.
+- unary `NEG.L`, `NOT.L`, and `TST.L` cases with explicit CCR expectations.
 - taken and not-taken `BEQ.S` cases;
 - an unconditional `BRA.S` over a skipped instruction.
 - `MOVE.L d16(A0),D0`;
