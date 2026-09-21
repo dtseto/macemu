@@ -512,10 +512,15 @@ int main()
 
     const CpuSnapshot loop_interpreter = run_loop_case(false);
     const CpuSnapshot loop_jit = run_loop_case(true);
+    const CpuSnapshot loop_jit_repeat = run_loop_case(true);
     const bool loop_pass = loop_interpreter.d == loop_jit.d &&
         loop_interpreter.a == loop_jit.a &&
         loop_interpreter.pc == loop_jit.pc &&
         loop_interpreter.sr == loop_jit.sr &&
+        loop_jit_repeat.d == loop_jit.d &&
+        loop_jit_repeat.a == loop_jit.a &&
+        loop_jit_repeat.pc == loop_jit.pc &&
+        loop_jit_repeat.sr == loop_jit.sr &&
         loop_interpreter.d[0] == 0 &&
         loop_interpreter.pc == loop_code_offset + 6;
     all_pass = all_pass && loop_pass;
