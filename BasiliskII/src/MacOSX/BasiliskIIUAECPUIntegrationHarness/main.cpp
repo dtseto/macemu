@@ -260,7 +260,13 @@ int main()
     for (const TestCase &test_case : test_cases) {
         const CpuSnapshot interpreter = run_case(test_case, false);
         const CpuSnapshot jit = run_case(test_case, true);
-        const bool test_pass = snapshots_match(test_case, interpreter, jit);
+        const CpuSnapshot jit_repeat = run_case(test_case, true);
+        const bool test_pass = snapshots_match(test_case, interpreter, jit) &&
+            jit_repeat.d == jit.d &&
+            jit_repeat.a == jit.a &&
+            jit_repeat.pc == jit.pc &&
+            jit_repeat.sr == jit.sr &&
+            jit_repeat.data_value == jit.data_value;
         all_pass = all_pass && test_pass;
         std::printf("UAE_CPU_CASE_%s interp_d0=%08x jit_d0=%08x interp_a0=%08x jit_a0=%08x interp_mem=%08x jit_mem=%08x interp_pc=%08x jit_pc=%08x interp_sr=%04x jit_sr=%04x %s\n",
             test_case.name,

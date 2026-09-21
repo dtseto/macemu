@@ -34,6 +34,8 @@ The current program installs five bounded programs at separate guest addresses:
 
 Each program is run through `m68k_do_execute` and `m68k_compile_execute`. The interpreter now runs to the explicit sentinel for multi-instruction cases. The harness compares all D registers, all A registers, PC, SR, and the guest data word, and also checks the expected D0 result, A0 result, memory result, and retired PC. A successful run ends with:
 
+Each case is also executed twice through the JIT at the same guest PC to verify basic translated-block reuse produces the same state.
+
 ```
 UAE_CPU_INTERPRETER_PASS
 UAE_CPU_JIT_PASS
