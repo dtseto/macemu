@@ -809,8 +809,17 @@ static bool run_external_corpus(const char *path)
         const bool stack_register_effective_address = vector.name.find("A7") != std::string::npos;
         const bool predecrement_effective_address = vector.name.find("-(A") != std::string::npos;
         const bool absolute_effective_address = vector.name.find("xxx") != std::string::npos;
+        bool absolute_address_safe = true;
+        if (absolute_effective_address) {
+            /* For the supported absolute-word shape, transactions are
+               [instruction PC, effective address, next PC, effective address].
+               High absolute-word targets still SIGBUS in the production JIT. */
+            absolute_address_safe = vector.access_addresses.size() >= 2 &&
+                vector.access_addresses[1] < 0x00800000u;
+        }
         if (indexed_effective_address || stack_register_effective_address ||
-            predecrement_effective_address || absolute_effective_address) {
+            predecrement_effective_address ||
+            (absolute_effective_address && !absolute_address_safe)) {
             skipped++;
             continue;
         }

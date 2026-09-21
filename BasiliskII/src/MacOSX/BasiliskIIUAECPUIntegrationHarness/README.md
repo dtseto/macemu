@@ -97,11 +97,14 @@ runner uses a 2 MB fixture for the normal integration/benchmark path and a
 instructions longer than one prefetch extension word, and address-heavy
 vectors whose effective-address setup cannot be proven safe without decoding
 the addressing mode. In particular, indexed (`Xn`), A7-based, predecrement
-(`-(An)`), and absolute (`xxx`) corpus forms are reported as skipped because
-they still cross known crash boundaries in the existing production JIT. This
-is an explicit coverage boundary, not a semantic pass. Sparse initial and
-final RAM is replayed and checked for supported vectors; direct `(An)` and
-supported postincrement forms are exercised normally.
+(`-(An)`), and high-address absolute-word (`xxx`) corpus forms are reported as
+skipped because they still cross known crash boundaries in the existing
+production JIT. Low-address absolute-word forms are now exercised normally;
+absolute-long forms remain outside this fixture because they require more
+than one extension word. These are explicit coverage boundaries, not semantic
+passes. Sparse initial and final RAM is replayed and checked for supported
+vectors; direct `(An)`, displacement, and supported postincrement forms are
+exercised normally.
 
 Example result from 400 mixed NOP/SWAP/EXT vectors:
 
