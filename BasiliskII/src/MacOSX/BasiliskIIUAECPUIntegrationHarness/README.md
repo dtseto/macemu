@@ -30,6 +30,7 @@ The current program installs five bounded programs at separate guest addresses:
 - a multi-instruction `MOVEQ`/`ADDI.L`/`SUBI.L` ALU sequence.
 - absolute `JSR`/`RTS` with stack restoration.
 - boundary-value `ADDI.L #-1` and `SUBI.L #1` borrow cases with explicit X/C expectations.
+- `MOVEQ #-1,D0` sign extension with explicit N flag expectation.
 - taken and not-taken `BEQ.S` cases;
 - an unconditional `BRA.S` over a skipped instruction.
 - `MOVE.L d16(A0),D0`;
