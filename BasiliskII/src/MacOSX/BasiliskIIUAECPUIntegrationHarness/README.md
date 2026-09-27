@@ -79,7 +79,7 @@ For the 68000 indexed corpus, use the explicit 68020 adaptation mode:
 
 ```sh
 python3 m68000_json_adapter.py /path/to/CLR.b.json \
-    --adapt-indexed-for-68020 -o /tmp/CLR-68020.jsonl --limit 300
+    --adapt-indexed-for-68020 -o /tmp/CLR-68020.jsonl --limit 2500
 ```
 
 Run the adapted corpus with the 24-bit bus fixture enabled:
@@ -129,6 +129,12 @@ more than one extension word. These are explicit coverage boundaries, not
 semantic passes. Sparse initial and final RAM is replayed and checked for
 supported vectors; direct `(An)`, displacement, postincrement, and
 predecrement forms are exercised normally.
+
+The complete adapted `CLR.b.json` file has also been validated: 1,973 of
+2,500 vectors pass interpreter/JIT comparison, with 527 explicit skips for
+odd PCs, unsupported A7/absolute boundaries, instruction-length limits, or
+inconsistent corpus metadata. No adapted indexed vector produced a semantic
+failure.
 
 Example result from 400 mixed NOP/SWAP/EXT vectors:
 
