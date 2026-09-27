@@ -795,6 +795,7 @@ static bool run_external_corpus(const char *path)
         return false;
     unsigned total = 0;
     unsigned passed = 0;
+    unsigned failures = 0;
     unsigned malformed = 0;
     unsigned skipped = 0;
     unsigned skipped_pc = 0;
@@ -904,12 +905,15 @@ static bool run_external_corpus(const char *path)
             interpreter.pc == jit.pc && interpreter.sr == jit.sr;
         if (pass)
             passed++;
-        else if (total <= 8)
+        else {
+            failures++;
+            if (failures <= 8)
             std::printf("UAE_CPU_CORPUS_FAIL name=%s expected_pc=%08x interp_pc=%08x jit_pc=%08x expected_sr=%04x interp_sr=%04x jit_sr=%04x\n",
                 vector.name.c_str(), static_cast<unsigned>(vector.expected.pc),
                 static_cast<unsigned>(interpreter.pc), static_cast<unsigned>(jit.pc),
                 static_cast<unsigned>(vector.expected.sr),
                 static_cast<unsigned>(interpreter.sr), static_cast<unsigned>(jit.sr));
+        }
     }
     std::printf("UAE_CPU_CORPUS_RESULT total=%u passed=%u skipped=%u malformed=%u %s\n",
         total, passed, skipped, malformed,

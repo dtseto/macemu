@@ -145,6 +145,28 @@ fixture; and `pc`, `length`, and `prepare` identify structural fixture
 boundaries. This keeps a passing supported subset from hiding changes in the
 unsupported population.
 
+The current external-family expansion has been validated against the first 100
+vectors from each of these decoded SingleStepTests files: `NOP.json`,
+`SWAP.json`, `EXT.w.json`, `EXT.l.json`, `AND.b.json`, `OR.b.json`, and
+`SUB.b.json`. All supported vectors in those families pass interpreter/JIT
+differential comparison. `ADD.b.json` remains outside the approved expansion:
+one supported `ADD.b (d16, PC), D6` vector currently produces the expected data
+result but misses the expected N and V flags in both the interpreter and JIT.
+That is an existing 68k semantic-baseline defect, not evidence that the JIT
+passes the vector, so it remains a tracked failure until the flag path is fixed.
+
+The reproducible expansion command is:
+
+```
+python3 m68000_json_adapter.py --limit 100 -o /tmp/family.jsonl \
+  /path/to/m68000/v1/NOP.json
+./BasiliskIIUAECPUIntegrationHarness --corpus /tmp/family.jsonl
+```
+
+Repeat it for the approved family files above. Use the adapter without
+`--adapt-indexed-for-68020` for these non-indexed families; use that option and
+`B2_TEST_24BIT_ADDRESS=1` only for the separate indexed-addressing corpus.
+
 ```
 UAE_CPU_INTERPRETER_PASS
 UAE_CPU_JIT_PASS
