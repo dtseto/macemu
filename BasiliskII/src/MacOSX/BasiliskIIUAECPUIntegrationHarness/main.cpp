@@ -883,18 +883,35 @@ static bool run_external_corpus(const char *path)
             skipped_memory++;
             continue;
         }
-        /* Reject internally inconsistent PC-relative records. The corpus
+        /* Reject internally inconsistent displacement records. The corpus
            supplies both the displacement word and the observed data address;
            a mismatch means the vector cannot validate CPU semantics. */
-        if ((vector.name.find("(d16,PC)") != std::string::npos ||
-             vector.name.find("(d16, PC)") != std::string::npos) &&
-            vector.access_addresses.size() >= 2) {
-            const uae_s32 displacement = static_cast<uae_s16>(vector.next_word);
-            const uae_u32 expected_ea = (vector.initial.pc + 2 + displacement) & 0x00ffffffu;
-            if (vector.access_addresses[1] != expected_ea) {
-                skipped++;
-                skipped_metadata++;
-                continue;
+        if (vector.access_addresses.size() >= 2) {
+            bool check_displacement_ea = false;
+            uae_u32 displacement_base = vector.initial.pc + 2;
+            if (vector.name.find("(d16,PC)") != std::string::npos ||
+                vector.name.find("(d16, PC)") != std::string::npos) {
+                check_displacement_ea = true;
+            } else {
+                const std::string marker = "(d16, A";
+                const size_t marker_start = vector.name.find(marker);
+                if (marker_start != std::string::npos &&
+                    marker_start + marker.size() < vector.name.size()) {
+                    const char register_number = vector.name[marker_start + marker.size()];
+                    if (register_number >= '0' && register_number <= '7') {
+                        check_displacement_ea = true;
+                        displacement_base = vector.initial.a[register_number - '0'] & 0x00ffffffu;
+                    }
+                }
+            }
+            if (check_displacement_ea) {
+                const uae_s32 displacement = static_cast<uae_s16>(vector.next_word);
+                const uae_u32 expected_ea = (displacement_base + displacement) & 0x00ffffffu;
+                if (vector.access_addresses[1] != expected_ea) {
+                    skipped++;
+                    skipped_metadata++;
+                    continue;
+                }
             }
         }
         total++;

@@ -225,9 +225,18 @@ static __inline__ void fast_memory_selftest(void)
         ok ? "passed" : "FAILED");
 }
 
+static __inline__ uaecptr memory_bus_address(uaecptr addr)
+{
+    static int address_space_24 = -1;
+    if (address_space_24 < 0) {
+        const char *enabled = getenv("B2_TEST_24BIT_ADDRESS");
+        address_space_24 = enabled && enabled[0] == '1' ? 1 : 0;
+    }
+    return address_space_24 ? (addr & 0x00ffffffu) : addr;
+}
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
-	return (uae_u8 *)MEMBaseDiff + addr;
+	return (uae_u8 *)MEMBaseDiff + memory_bus_address(addr);
 }
 static __inline__ uae_u32 do_get_virtual_address(uae_u8 *addr)
 {
@@ -364,4 +373,3 @@ static __inline__ void check_ram_boundary(uaecptr addr, int size, bool write) {}
 static inline void flush_internals() {}
 
 #endif /* MEMORY_H */
-

@@ -146,16 +146,21 @@ fixture; `metadata` identifies internally inconsistent corpus records; and
 keeps a passing supported subset from hiding changes in the unsupported
 population.
 
-The current external-family expansion has been validated against the first 100
-vectors from each of these decoded SingleStepTests files: `NOP.json`,
-`SWAP.json`, `EXT.w.json`, `EXT.l.json`, `AND.b.json`, `OR.b.json`,
-`SUB.b.json`, `ADD.b.json`, and `CLR.b.json`. In the combined 900-vector
-run, all 757 supported vectors pass interpreter/JIT differential comparison;
-the remaining 143 are explicit fixture-boundary skips. ADD.b contributes 63
-supported passes and one internally inconsistent PC-relative record. That
-record declares a displacement and an observed data address that differ by
-four bytes; it is reported under the `metadata` skip count rather than being
-treated as a CPU semantic result. CLR.b contributes 77 supported passes.
+The complete available files for these decoded SingleStepTests families have
+now been validated: `NOP.json`, `SWAP.json`, `EXT.w.json`, `EXT.l.json`,
+`AND.b.json`, `OR.b.json`, `SUB.b.json`, `ADD.b.json`, and `CLR.b.json`.
+The 22,500-vector run passes all 17,797 supported vectors through interpreter/
+JIT differential comparison, with 4,703 explicit fixture-boundary or corpus-
+metadata skips and no malformed records. The full corpus run uses
+`B2_TEST_24BIT_ADDRESS=1`; this is required because the 68000 vectors model a
+24-bit bus and effective addresses may alias across the 16 MiB boundary.
+The memory fixture now applies that bus mask consistently to direct memory
+translation, matching the production JIT's 24-bit addressing behavior.
+
+For reproducibility, concatenate the adapter outputs and run the combined
+JSONL file with the 24-bit mode enabled. Corpus skip counts include
+`metadata` records whose declared displacement and observed access address do
+not agree, so they are not silently counted as semantic passes.
 
 The reproducible expansion command is:
 
