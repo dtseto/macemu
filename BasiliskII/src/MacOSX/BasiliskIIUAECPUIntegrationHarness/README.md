@@ -148,13 +148,14 @@ population.
 
 The current external-family expansion has been validated against the first 100
 vectors from each of these decoded SingleStepTests files: `NOP.json`,
-`SWAP.json`, `EXT.w.json`, `EXT.l.json`, `AND.b.json`, `OR.b.json`, and
-`SUB.b.json`. All supported vectors in those families pass interpreter/JIT
-differential comparison. The first 100 `ADD.b.json` vectors are now also
-covered: 63 supported vectors pass and one internally inconsistent PC-relative
-record is explicitly skipped. That record declares a displacement and an
-observed data address that differ by four bytes; it is reported under the
-`metadata` skip count rather than being treated as a CPU semantic result.
+`SWAP.json`, `EXT.w.json`, `EXT.l.json`, `AND.b.json`, `OR.b.json`,
+`SUB.b.json`, `ADD.b.json`, and `CLR.b.json`. In the combined 900-vector
+run, all 757 supported vectors pass interpreter/JIT differential comparison;
+the remaining 143 are explicit fixture-boundary skips. ADD.b contributes 63
+supported passes and one internally inconsistent PC-relative record. That
+record declares a displacement and an observed data address that differ by
+four bytes; it is reported under the `metadata` skip count rather than being
+treated as a CPU semantic result. CLR.b contributes 77 supported passes.
 
 The reproducible expansion command is:
 
