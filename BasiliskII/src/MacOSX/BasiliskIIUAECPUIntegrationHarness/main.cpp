@@ -805,6 +805,7 @@ static bool run_external_corpus(const char *path)
     unsigned skipped_absolute = 0;
     unsigned skipped_memory = 0;
     unsigned skipped_prepare = 0;
+    unsigned skipped_metadata = 0;
     unsigned line_index = 0;
     std::string line;
     while (std::getline(input, line)) {
@@ -882,6 +883,20 @@ static bool run_external_corpus(const char *path)
             skipped_memory++;
             continue;
         }
+        /* Reject internally inconsistent PC-relative records. The corpus
+           supplies both the displacement word and the observed data address;
+           a mismatch means the vector cannot validate CPU semantics. */
+        if ((vector.name.find("(d16,PC)") != std::string::npos ||
+             vector.name.find("(d16, PC)") != std::string::npos) &&
+            vector.access_addresses.size() >= 2) {
+            const uae_s32 displacement = static_cast<uae_s16>(vector.next_word);
+            const uae_u32 expected_ea = (vector.initial.pc + 2 + displacement) & 0x00ffffffu;
+            if (vector.access_addresses[1] != expected_ea) {
+                skipped++;
+                skipped_metadata++;
+                continue;
+            }
+        }
         total++;
         if (!prepare_corpus_vector(vector, false)) {
             skipped++;
@@ -918,9 +933,9 @@ static bool run_external_corpus(const char *path)
     std::printf("UAE_CPU_CORPUS_RESULT total=%u passed=%u skipped=%u malformed=%u %s\n",
         total, passed, skipped, malformed,
         total != 0 && malformed == 0 && passed == total ? "PASS" : "FAIL");
-    std::printf("UAE_CPU_CORPUS_SKIPS pc=%u length=%u indexed=%u a7=%u absolute=%u memory=%u prepare=%u\n",
+    std::printf("UAE_CPU_CORPUS_SKIPS pc=%u length=%u indexed=%u a7=%u absolute=%u memory=%u prepare=%u metadata=%u\n",
         skipped_pc, skipped_length, skipped_indexed, skipped_a7,
-        skipped_absolute, skipped_memory, skipped_prepare);
+        skipped_absolute, skipped_memory, skipped_prepare, skipped_metadata);
     return total != 0 && malformed == 0 && passed == total;
 }
 

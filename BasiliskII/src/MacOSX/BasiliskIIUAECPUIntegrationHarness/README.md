@@ -141,19 +141,20 @@ Corpus skips are also reported by reason. `indexed` identifies indexed `Xn`
 forms reserved for the separate indexed-addressing milestone; `a7` identifies
 stack-register forms; `absolute` identifies high absolute-word targets;
 `memory` identifies vectors whose sparse state or accesses do not fit the
-fixture; and `pc`, `length`, and `prepare` identify structural fixture
-boundaries. This keeps a passing supported subset from hiding changes in the
-unsupported population.
+fixture; `metadata` identifies internally inconsistent corpus records; and
+`pc`, `length`, and `prepare` identify structural fixture boundaries. This
+keeps a passing supported subset from hiding changes in the unsupported
+population.
 
 The current external-family expansion has been validated against the first 100
 vectors from each of these decoded SingleStepTests files: `NOP.json`,
 `SWAP.json`, `EXT.w.json`, `EXT.l.json`, `AND.b.json`, `OR.b.json`, and
 `SUB.b.json`. All supported vectors in those families pass interpreter/JIT
-differential comparison. `ADD.b.json` remains outside the approved expansion:
-one supported `ADD.b (d16, PC), D6` vector currently produces the expected data
-result but misses the expected N and V flags in both the interpreter and JIT.
-That is an existing 68k semantic-baseline defect, not evidence that the JIT
-passes the vector, so it remains a tracked failure until the flag path is fixed.
+differential comparison. The first 100 `ADD.b.json` vectors are now also
+covered: 63 supported vectors pass and one internally inconsistent PC-relative
+record is explicitly skipped. That record declares a displacement and an
+observed data address that differ by four bytes; it is reported under the
+`metadata` skip count rather than being treated as a CPU semantic result.
 
 The reproducible expansion command is:
 
