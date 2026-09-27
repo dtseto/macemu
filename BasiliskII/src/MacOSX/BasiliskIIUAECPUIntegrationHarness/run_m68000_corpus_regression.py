@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import json
 import os
 import re
 import subprocess
@@ -24,7 +25,7 @@ RESULT = re.compile(
 
 
 def run_family(adapter: Path, harness: Path, corpus_root: Path,
-               output_dir: Path, family: str, limit: int) -> tuple[bool, str]:
+               output_dir: Path, family: str, limit: int) -> tuple[bool, str, dict]:
     source = corpus_root / f"{family}.json"
     output = output_dir / f"{family}-68020.jsonl"
     adapter_args = [sys.executable, str(adapter)]
@@ -33,7 +34,9 @@ def run_family(adapter: Path, harness: Path, corpus_root: Path,
     adapter_args += ["--limit", str(limit), "-o", str(output), str(source)]
     adapted = subprocess.run(adapter_args, capture_output=True, text=True)
     if adapted.returncode != 0:
-        return False, f"{family}: adapter failed: {adapted.stderr.strip()}"
+        return False, f"{family}: adapter failed: {adapted.stderr.strip()}", {
+            "family": family, "status": "ADAPTER_FAIL",
+        }
 
     environment = os.environ.copy()
     environment["B2_TEST_24BIT_ADDRESS"] = "1"
@@ -43,11 +46,21 @@ def run_family(adapter: Path, harness: Path, corpus_root: Path,
     )
     match = RESULT.search(result.stdout)
     if not match:
-        return False, f"{family}: missing corpus result (exit {result.returncode})"
+        return False, f"{family}: missing corpus result (exit {result.returncode})", {
+            "family": family, "status": "NO_RESULT",
+        }
     total, passed, skipped, malformed, status = match.groups()
     summary = (f"{family}: total={total} passed={passed} skipped={skipped} "
                f"malformed={malformed} {status}")
-    return result.returncode == 0 and status == "PASS" and malformed == "0", summary
+    details = {
+        "family": family,
+        "total": int(total),
+        "passed": int(passed),
+        "skipped": int(skipped),
+        "malformed": int(malformed),
+        "status": status,
+    }
+    return result.returncode == 0 and status == "PASS" and malformed == "0", summary, details
 
 
 def main() -> int:
@@ -64,11 +77,17 @@ def main() -> int:
                         help="vectors per family; 0 means all")
     parser.add_argument("--jobs", type=int, default=4,
                         help="families to execute concurrently (default: 4)")
+    parser.add_argument("--summary-json", type=Path,
+                        help="write aggregate and per-family results as JSON")
+    parser.add_argument("--min-passed", type=int, default=0,
+                        help="minimum aggregate supported-pass count")
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit cannot be negative")
     if args.jobs < 1:
         parser.error("--jobs must be positive")
+    if args.min_passed < 0:
+        parser.error("--min-passed cannot be negative")
 
     adapter = args.adapter or Path(__file__).with_name("m68000_json_adapter.py")
     if not adapter.is_file() or not args.harness.is_file():
@@ -90,9 +109,21 @@ def main() -> int:
                     adapter, args.harness, args.corpus_root, output_dir,
                     family, args.limit),
                 FAMILIES))
-        for passed, summary in results:
+        details = [result[2] for result in results]
+        for passed, summary, _ in results:
             print(summary)
             failures += not passed
+        aggregate = {
+            "total": sum(item.get("total", 0) for item in details),
+            "passed": sum(item.get("passed", 0) for item in details),
+            "skipped": sum(item.get("skipped", 0) for item in details),
+            "malformed": sum(item.get("malformed", 0) for item in details),
+            "families": details,
+        }
+        if aggregate["passed"] < args.min_passed:
+            failures += 1
+        if args.summary_json:
+            args.summary_json.write_text(json.dumps(aggregate, indent=2) + "\n")
     finally:
         if temporary:
             for path in output_dir.glob("*.jsonl"):
