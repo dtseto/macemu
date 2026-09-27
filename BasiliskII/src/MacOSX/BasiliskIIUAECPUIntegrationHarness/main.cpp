@@ -646,13 +646,24 @@ static bool parse_corpus_vector(const std::string &line, CorpusVector &vector)
     uae_u32 value = 0;
     std::string initial_object;
     std::string final_object;
-    if (!json_string(line, "name", vector.name) ||
-        !json_object(line, "initial", initial_object) ||
-        !json_object(line, "final", final_object) ||
-        !parse_corpus_state(initial_object, vector.initial) ||
-        !parse_corpus_state(final_object, vector.expected) ||
-        !json_u32(line, "opcode", value))
+    const auto parse_error = [](const char *stage) {
+        static unsigned count = 0;
+        if (count++ < 8)
+            std::printf("UAE_CPU_CORPUS_PARSE_ERROR stage=%s\n", stage);
         return false;
+    };
+    if (!json_string(line, "name", vector.name))
+        return parse_error("name");
+    if (!json_object(line, "initial", initial_object))
+        return parse_error("initial_object");
+    if (!json_object(line, "final", final_object))
+        return parse_error("final_object");
+    if (!parse_corpus_state(initial_object, vector.initial))
+        return parse_error("initial_state");
+    if (!parse_corpus_state(final_object, vector.expected))
+        return parse_error("final_state");
+    if (!json_u32(line, "opcode", value))
+        return parse_error("opcode");
     vector.opcode = static_cast<uae_u16>(value);
     const std::string words_marker = "\"instruction_words\":[";
     const size_t words_start = line.find(words_marker);
@@ -786,27 +797,48 @@ static bool run_external_corpus(const char *path)
     unsigned passed = 0;
     unsigned malformed = 0;
     unsigned skipped = 0;
+    unsigned skipped_pc = 0;
+    unsigned skipped_length = 0;
+    unsigned skipped_indexed = 0;
+    unsigned skipped_a7 = 0;
+    unsigned skipped_absolute = 0;
+    unsigned skipped_memory = 0;
+    unsigned skipped_prepare = 0;
+    unsigned line_index = 0;
     std::string line;
     while (std::getline(input, line)) {
+        const unsigned current_line = line_index++;
         if (line.empty())
             continue;
         CorpusVector vector;
         if (!parse_corpus_vector(line, vector)) {
             malformed++;
+            std::printf("UAE_CPU_CORPUS_MALFORMED line=%u\n", current_line);
             continue;
         }
         if ((vector.initial.pc & 1) != 0 ||
             vector.initial.pc + 6 >= corpus_memory_size ||
-            vector.expected.pc < vector.initial.pc ||
+            vector.expected.pc < vector.initial.pc) {
+            skipped++;
+            skipped_pc++;
+            continue;
+        }
+        if (vector.expected.pc - vector.initial.pc < 2 ||
             vector.expected.pc - vector.initial.pc > 4) {
             skipped++;
+            skipped_length++;
             continue;
         }
         const bool register_only = vector.name.find(" NOP ") != std::string::npos ||
             vector.name.find(" SWAP ") != std::string::npos ||
             vector.name.find(" EXT.") != std::string::npos;
         const bool indexed_effective_address = vector.name.find("Xn") != std::string::npos;
+        const bool indexed_adapted_for_68020 =
+            line.find("\"indexed_adapted\":true") != std::string::npos;
         const bool stack_register_effective_address = vector.name.find("A7") != std::string::npos;
+        const bool indexed_stack_register = indexed_effective_address &&
+            line.find("\"index_is_address\":true") != std::string::npos &&
+            line.find("\"index_register\":7") != std::string::npos;
         const bool absolute_effective_address = vector.name.find("xxx") != std::string::npos;
         bool absolute_address_safe = true;
         if (absolute_effective_address) {
@@ -816,9 +848,22 @@ static bool run_external_corpus(const char *path)
             absolute_address_safe = vector.access_addresses.size() >= 2 &&
                 vector.access_addresses[1] < 0x00800000u;
         }
-        if (indexed_effective_address || stack_register_effective_address ||
-            (absolute_effective_address && !absolute_address_safe)) {
+        const bool indexed_24bit_ready = indexed_effective_address &&
+            indexed_adapted_for_68020 && std::getenv("B2_TEST_24BIT_ADDRESS") &&
+            std::getenv("B2_TEST_24BIT_ADDRESS")[0] == '1';
+        if (indexed_effective_address && !indexed_24bit_ready) {
             skipped++;
+            skipped_indexed++;
+            continue;
+        }
+        if (stack_register_effective_address || indexed_stack_register) {
+            skipped++;
+            skipped_a7++;
+            continue;
+        }
+        if (absolute_effective_address && !absolute_address_safe) {
+            skipped++;
+            skipped_absolute++;
             continue;
         }
         bool address_space_safe = register_only || !vector.access_addresses.empty();
@@ -833,11 +878,13 @@ static bool run_external_corpus(const char *path)
             address_space_safe = address_space_safe && cell.first < corpus_memory_size;
         if (!address_space_safe) {
             skipped++;
+            skipped_memory++;
             continue;
         }
         total++;
         if (!prepare_corpus_vector(vector, false)) {
             skipped++;
+            skipped_prepare++;
             continue;
         }
         m68k_do_execute();
@@ -845,6 +892,7 @@ static bool run_external_corpus(const char *path)
         const CpuSnapshot interpreter = capture_corpus_snapshot();
         if (!prepare_corpus_vector(vector, true)) {
             skipped++;
+            skipped_prepare++;
             continue;
         }
         m68k_compile_execute();
@@ -866,6 +914,9 @@ static bool run_external_corpus(const char *path)
     std::printf("UAE_CPU_CORPUS_RESULT total=%u passed=%u skipped=%u malformed=%u %s\n",
         total, passed, skipped, malformed,
         total != 0 && malformed == 0 && passed == total ? "PASS" : "FAIL");
+    std::printf("UAE_CPU_CORPUS_SKIPS pc=%u length=%u indexed=%u a7=%u absolute=%u memory=%u prepare=%u\n",
+        skipped_pc, skipped_length, skipped_indexed, skipped_a7,
+        skipped_absolute, skipped_memory, skipped_prepare);
     return total != 0 && malformed == 0 && passed == total;
 }
 

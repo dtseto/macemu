@@ -86,7 +86,8 @@ static void sync_jit_prefs(uae_prefs &p)
 	p.cpu_level = pref_cpu_to_level(p.cpu_model);
 	p.cpu_compatible = false;  /* AArch64: enable native block dispatch; opcode codegen is capped separately */
 	p.illegal_mem = false;
-	p.address_space_24 = false;
+	const char *address_space_24 = getenv("B2_TEST_24BIT_ADDRESS");
+	p.address_space_24 = address_space_24 && address_space_24[0] == '1';
 
 	int distrust = (!jit_enabled || !canbang) ? 1 : 0;
 	/* DIAGNOSTIC: force memory distrust under JIT so compiled code routes I/O

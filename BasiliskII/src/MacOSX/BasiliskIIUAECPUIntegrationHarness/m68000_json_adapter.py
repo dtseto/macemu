@@ -80,7 +80,8 @@ def normalize_state(state: Any, label: str) -> dict[str, Any]:
     return registers
 
 
-def normalize_test(test: Any, source: str, index: int) -> dict[str, Any]:
+def normalize_test(test: Any, source: str, index: int,
+                   adapt_indexed_for_68020: bool = False) -> dict[str, Any]:
     if not isinstance(test, dict):
         raise CorpusError(f"{source}[{index}] must be an object")
     if "name" not in test or "initial" not in test or "final" not in test:
@@ -88,6 +89,31 @@ def normalize_test(test: Any, source: str, index: int) -> dict[str, Any]:
     initial = normalize_state(test["initial"], f"{source}[{index}].initial")
     final = normalize_state(test["final"], f"{source}[{index}].final")
     opcode = parse_opcode(test["name"])
+    extension_word = initial["prefetch"][1]
+    indexed = "Xn" in test["name"]
+    indexed_metadata = None
+    instruction_extension_word = extension_word
+    if indexed:
+        index_field = (extension_word >> 12) & 0xF
+        if adapt_indexed_for_68020:
+            # The source vectors are 68000 brief-format tests. On 68020+, bit
+            # 8 selects full-format addressing and bits 10..9 are the scale;
+            # clear all three so the same effective address is represented by
+            # the 68020 brief form with scale 1.
+            instruction_extension_word &= ~0x700
+        indexed_metadata = {
+            "extension_word": extension_word,
+            "index_register": index_field & 0x7,
+            "index_is_address": bool(index_field & 0x8),
+            "index_is_word": not bool(extension_word & 0x800),
+            "scale": 1 << ((extension_word >> 9) & 0x3),
+            # The selected SingleStepTests corpus is 68000-based. Its brief
+            # indexed form has no scale field; retain the 68020 scale above
+            # while making the source-model interpretation explicit.
+            "scale_68000": 1,
+            "adapted_for_68020": adapt_indexed_for_68020,
+            "adapted_extension_word": instruction_extension_word,
+        }
     access_addresses = []
     transactions = test.get("transactions", [])
     if not isinstance(transactions, list):
@@ -102,7 +128,9 @@ def normalize_test(test: Any, source: str, index: int) -> dict[str, Any]:
         "index": index,
         "name": test["name"],
         "opcode": opcode,
-        "instruction_words": [opcode, initial["prefetch"][1]],
+        "instruction_words": [opcode, instruction_extension_word],
+        "indexed_adapted": indexed and adapt_indexed_for_68020,
+        "indexed": indexed_metadata,
         "initial": initial,
         "final": final,
         "access_addresses": access_addresses,
@@ -136,6 +164,8 @@ def main() -> int:
                         help="maximum vectors to emit (0 means all)")
     parser.add_argument("--opcode", type=lambda value: int(value, 0),
                         help="emit only one opcode, e.g. 0x4e71")
+    parser.add_argument("--adapt-indexed-for-68020", action="store_true",
+                        help="clear 68000 brief-index scale bits for the 68020 JIT")
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit cannot be negative")
@@ -145,7 +175,8 @@ def main() -> int:
     try:
         for path in args.inputs:
             for index, test in enumerate(read_tests(path)):
-                vector = normalize_test(test, str(path), index)
+                vector = normalize_test(test, str(path), index,
+                                        args.adapt_indexed_for_68020)
                 if args.opcode is not None and vector["opcode"] != args.opcode:
                     continue
                 output.write(json.dumps(vector, separators=(",", ":")) + "\n")

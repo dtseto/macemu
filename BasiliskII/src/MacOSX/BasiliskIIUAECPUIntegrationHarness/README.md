@@ -75,10 +75,33 @@ For broader semantics coverage, the external [SingleStepTests/m68000 corpus](htt
 python3 m68000_json_adapter.py /path/to/NOP.json -o /tmp/nop.jsonl --limit 100
 ```
 
+For the 68000 indexed corpus, use the explicit 68020 adaptation mode:
+
+```sh
+python3 m68000_json_adapter.py /path/to/CLR.b.json \
+    --adapt-indexed-for-68020 -o /tmp/CLR-68020.jsonl --limit 300
+```
+
+Run the adapted corpus with the 24-bit bus fixture enabled:
+
+```sh
+B2_TEST_24BIT_ADDRESS=1 ./BasiliskIIUAECPUIntegrationHarness \
+    --corpus /tmp/CLR-68020.jsonl
+```
+
+This clears the 68000 brief-index full-format and scale selector bits in the
+emitted extension word. The original extension and the adaptation decision
+remain in the JSON metadata, so the transformation is auditable and cannot be
+mistaken for a native 68000 execution result.
+
 Each output line preserves the initial/final register and RAM state, the
 opcode extracted from the corpus test name, the first two instruction words,
-and the source vector identity. This gives the eventual C++ differential
-runner a stable input contract without copying the upstream corpus into git.
+and the source vector identity. Indexed vectors additionally carry the raw
+extension word, index-register class, index size, and both the 68020 scale and
+68000 scale interpretation. The selected SingleStepTests source is 68000-based,
+while this harness currently uses a 68020 CPU model; keeping both values makes
+that model mismatch explicit before a vector is enabled in the production C++
+runner.
 
 The integration executable now consumes that JSONL format directly for the
 single-word-vector milestone:
@@ -96,24 +119,31 @@ runner uses a 2 MB fixture for the normal integration/benchmark path and a
 16 MB fixture for corpus mode. It currently skips odd or out-of-range PCs,
 instructions longer than one prefetch extension word, and address-heavy
 vectors whose effective-address setup cannot be proven safe without decoding
-the addressing mode. In particular, indexed (`Xn`), A7-based, and high-address
-absolute-word (`xxx`) corpus forms are reported as skipped because they still
-cross known crash or stack-bank boundaries in the existing production JIT.
-Indexed vectors also expose an ARM64 backend defect: 68000 word-indexed
-addressing must sign-extend the index register's low word, but representative
-corpus vectors currently mismatch or crash in the JIT. Non-A7 predecrement
-(`-(An)`) and low-address absolute-word forms are now
-exercised normally; absolute-long forms remain outside this fixture because
-they require more than one extension word. These are explicit coverage
-boundaries, not semantic passes. Sparse initial and final RAM is replayed and
-checked for supported vectors; direct `(An)`, displacement, postincrement, and
+the addressing mode. Native 68000 indexed vectors remain skipped unless they
+have been explicitly adapted to the 68020 brief format and the 24-bit fixture
+is enabled. A7-based and high-address absolute-word (`xxx`) forms remain
+skipped because they cross known stack-bank or fixture boundaries. Non-A7
+predecrement (`-(An)`) and low-address absolute-word forms are exercised
+normally; absolute-long forms remain outside this fixture because they require
+more than one extension word. These are explicit coverage boundaries, not
+semantic passes. Sparse initial and final RAM is replayed and checked for
+supported vectors; direct `(An)`, displacement, postincrement, and
 predecrement forms are exercised normally.
 
 Example result from 400 mixed NOP/SWAP/EXT vectors:
 
 ```
 UAE_CPU_CORPUS_RESULT total=400 passed=400 skipped=0 malformed=0 PASS
+UAE_CPU_CORPUS_SKIPS pc=0 length=0 indexed=0 a7=0 absolute=0 memory=0 prepare=0
 ```
+
+Corpus skips are also reported by reason. `indexed` identifies indexed `Xn`
+forms reserved for the separate indexed-addressing milestone; `a7` identifies
+stack-register forms; `absolute` identifies high absolute-word targets;
+`memory` identifies vectors whose sparse state or accesses do not fit the
+fixture; and `pc`, `length`, and `prepare` identify structural fixture
+boundaries. This keeps a passing supported subset from hiding changes in the
+unsupported population.
 
 ```
 UAE_CPU_INTERPRETER_PASS

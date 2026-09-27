@@ -698,9 +698,15 @@ uae_u32 get_disp_ea_020 (uae_u32 base, uae_u32 dp)
 	if (dp & 0x3) base = get_long (base);
 	if (dp & 0x4) base += regd;
 
-	return base + outer;
+	uae_u32 result = base + outer;
+	if (getenv("B2_TEST_24BIT_ADDRESS") && getenv("B2_TEST_24BIT_ADDRESS")[0] == '1')
+		result &= 0x00ffffffu;
+	return result;
     } else {
-	return base + (uae_s32)((uae_s8)dp) + regd;
+	uae_u32 result = base + (uae_s32)((uae_s8)dp) + regd;
+	if (getenv("B2_TEST_24BIT_ADDRESS") && getenv("B2_TEST_24BIT_ADDRESS")[0] == '1')
+		result &= 0x00ffffffu;
+	return result;
     }
 }
 
