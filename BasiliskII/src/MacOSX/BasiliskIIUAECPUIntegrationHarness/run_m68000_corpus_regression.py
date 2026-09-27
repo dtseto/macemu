@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import os
 import re
 import subprocess
@@ -61,9 +62,13 @@ def main() -> int:
                         help="retain generated JSONL files in this directory")
     parser.add_argument("--limit", type=int, default=2500,
                         help="vectors per family; 0 means all")
+    parser.add_argument("--jobs", type=int, default=4,
+                        help="families to execute concurrently (default: 4)")
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit cannot be negative")
+    if args.jobs < 1:
+        parser.error("--jobs must be positive")
 
     adapter = args.adapter or Path(__file__).with_name("m68000_json_adapter.py")
     if not adapter.is_file() or not args.harness.is_file():
@@ -78,9 +83,14 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     failures = 0
     try:
-        for family in FAMILIES:
-            passed, summary = run_family(adapter, args.harness, args.corpus_root,
-                                         output_dir, family, args.limit)
+        worker_count = min(args.jobs, len(FAMILIES))
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            results = list(executor.map(
+                lambda family: run_family(
+                    adapter, args.harness, args.corpus_root, output_dir,
+                    family, args.limit),
+                FAMILIES))
+        for passed, summary in results:
             print(summary)
             failures += not passed
     finally:

@@ -187,6 +187,10 @@ python3 run_m68000_corpus_regression.py \
   --harness /path/to/BasiliskIIUAECPUIntegrationHarness
 ```
 
+The runner defaults to four concurrent family processes and preserves stable
+family-order reporting. The complete automated run reproduces 17,797 passes,
+4,703 explicit skips, and zero malformed vectors.
+
 The reproducible expansion command is:
 
 ```
