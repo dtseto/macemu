@@ -177,6 +177,16 @@ python3 -m unittest discover \
   -s BasiliskIIUAECPUIntegrationHarness -p 'test_*.py'
 ```
 
+The complete family sweep can be reproduced with the regression runner. It
+automatically enables 24-bit bus mode and applies the 68020 indexed adaptation
+only to `CLR.b`:
+
+```sh
+python3 run_m68000_corpus_regression.py \
+  --corpus-root /path/to/m68000/v1 \
+  --harness /path/to/BasiliskIIUAECPUIntegrationHarness
+```
+
 The reproducible expansion command is:
 
 ```
