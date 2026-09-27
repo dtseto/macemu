@@ -24,6 +24,27 @@ RESULT = re.compile(
 )
 
 
+def apply_baseline(details: list[dict], baseline: dict) -> list[str]:
+    """Annotate family results and return pass-count regressions."""
+    previous = {
+        item["family"]: item["passed"]
+        for item in baseline.get("families", [])
+        if "family" in item and "passed" in item
+    }
+    regressions = []
+    for item in details:
+        old_passed = previous.get(item["family"])
+        if old_passed is None:
+            continue
+        item["baseline_passed"] = old_passed
+        if item.get("passed", 0) < old_passed:
+            regressions.append(
+                f"{item['family']}: passed {item.get('passed', 0)} "
+                f"below baseline {old_passed}"
+            )
+    return regressions
+
+
 def run_family(adapter: Path, harness: Path, corpus_root: Path,
                output_dir: Path, family: str, limit: int) -> tuple[bool, str, dict]:
     source = corpus_root / f"{family}.json"
@@ -81,6 +102,8 @@ def main() -> int:
                         help="write aggregate and per-family results as JSON")
     parser.add_argument("--min-passed", type=int, default=0,
                         help="minimum aggregate supported-pass count")
+    parser.add_argument("--baseline-json", type=Path,
+                        help="fail if any family drops below this prior summary")
     args = parser.parse_args()
     if args.limit < 0:
         parser.error("--limit cannot be negative")
@@ -88,6 +111,14 @@ def main() -> int:
         parser.error("--jobs must be positive")
     if args.min_passed < 0:
         parser.error("--min-passed cannot be negative")
+    baseline = None
+    if args.baseline_json:
+        try:
+            baseline = json.loads(args.baseline_json.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            parser.error(f"cannot read baseline JSON: {error}")
+        if not isinstance(baseline, dict):
+            parser.error("baseline JSON must contain an object")
 
     adapter = args.adapter or Path(__file__).with_name("m68000_json_adapter.py")
     if not adapter.is_file() or not args.harness.is_file():
@@ -113,12 +144,17 @@ def main() -> int:
         for passed, summary, _ in results:
             print(summary)
             failures += not passed
+        baseline_regressions = apply_baseline(details, baseline or {})
+        for regression in baseline_regressions:
+            print("BASELINE_REGRESSION " + regression)
+        failures += len(baseline_regressions)
         aggregate = {
             "total": sum(item.get("total", 0) for item in details),
             "passed": sum(item.get("passed", 0) for item in details),
             "skipped": sum(item.get("skipped", 0) for item in details),
             "malformed": sum(item.get("malformed", 0) for item in details),
             "families": details,
+            "baseline_regressions": baseline_regressions,
         }
         if aggregate["passed"] < args.min_passed:
             failures += 1

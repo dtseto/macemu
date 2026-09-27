@@ -196,13 +196,17 @@ aggregate remains 17,797 passes and 4,703 skips.
 
 For CI-style gating, `--min-passed` enforces an aggregate supported-pass
 floor and `--summary-json` writes machine-readable totals plus per-family
-results:
+results. `--baseline-json` additionally fails if any family’s supported-pass
+count falls below the corresponding family in a prior summary. Families that
+are absent from the baseline are not compared, which permits adding a new
+family without invalidating an older baseline:
 
 ```sh
 python3 run_m68000_corpus_regression.py \
   --corpus-root /path/to/m68000/v1 \
   --harness /path/to/BasiliskIIUAECPUIntegrationHarness \
-  --min-passed 18116 --summary-json /tmp/m68000-summary.json
+  --min-passed 18116 --summary-json /tmp/m68000-summary.json \
+  --baseline-json /tmp/previous-m68000-summary.json
 ```
 
 The reproducible expansion command is:

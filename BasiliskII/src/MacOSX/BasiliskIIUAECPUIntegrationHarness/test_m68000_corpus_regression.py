@@ -63,6 +63,23 @@ class RegressionRunnerTests(unittest.TestCase):
         self.assertEqual(details["malformed"], 1)
         self.assertEqual(details["status"], "FAIL")
 
+    def test_baseline_annotation_accepts_unchanged_family(self):
+        details = [{"family": "NOP", "passed": 10}]
+        baseline = {"families": [{"family": "NOP", "passed": 10}]}
+
+        regressions = regression.apply_baseline(details, baseline)
+
+        self.assertEqual(regressions, [])
+        self.assertEqual(details[0]["baseline_passed"], 10)
+
+    def test_baseline_annotation_reports_family_regression(self):
+        details = [{"family": "NOP", "passed": 9}]
+        baseline = {"families": [{"family": "NOP", "passed": 10}]}
+
+        regressions = regression.apply_baseline(details, baseline)
+
+        self.assertEqual(regressions, ["NOP: passed 9 below baseline 10"])
+
 
 if __name__ == "__main__":
     unittest.main()
