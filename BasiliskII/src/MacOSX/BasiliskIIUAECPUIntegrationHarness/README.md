@@ -168,6 +168,15 @@ JSONL file with the 24-bit mode enabled. Corpus skip counts include
 `metadata` records whose declared displacement and observed access address do
 not agree, so they are not silently counted as semantic passes.
 
+The adapter contract has a standalone Python test suite covering native versus
+adapted indexed words, preserved source metadata, non-indexed vectors, and
+malformed state/opcode rejection:
+
+```sh
+python3 -m unittest discover \
+  -s BasiliskIIUAECPUIntegrationHarness -p 'test_*.py'
+```
+
 The reproducible expansion command is:
 
 ```
