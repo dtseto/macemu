@@ -1,7 +1,9 @@
 name: Basilisk II harness
 on:
   push:
-    paths: ['tools/benchmark/**', 'scripts/bench.sh', 'tests/**', '.github/workflows/basiliskii-tests.yml']
+    paths: ['tools/benchmark/**', 'scripts/bench.sh', 'tests/**',
+            'BasiliskII/src/MacOSX/BasiliskIIUAECPUIntegrationHarness/**',
+            '.github/workflows/basiliskii-tests.yml']
   pull_request:
 jobs:
   harness:
@@ -11,6 +13,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Run M68000 harness contract tests
+        run: >-
+          python3 -m unittest discover
+          -s BasiliskII/src/MacOSX/BasiliskIIUAECPUIntegrationHarness
+          -p 'test_*.py'
       - name: Run Xcode benchmark tests
         run: >-
           xcodebuild test
