@@ -188,8 +188,10 @@ python3 run_m68000_corpus_regression.py \
 ```
 
 The runner defaults to four concurrent family processes and preserves stable
-family-order reporting. The complete automated run reproduces 17,797 passes,
-4,703 explicit skips, and zero malformed vectors.
+family-order reporting. Because it adapts CLR.b indexed vectors for the
+68020 model, its complete automated run produces 18,116 supported passes,
+4,384 explicit skips, and zero malformed vectors. The non-adapted family
+aggregate remains 17,797 passes and 4,703 skips.
 
 For CI-style gating, `--min-passed` enforces an aggregate supported-pass
 floor and `--summary-json` writes machine-readable totals plus per-family
@@ -199,7 +201,7 @@ results:
 python3 run_m68000_corpus_regression.py \
   --corpus-root /path/to/m68000/v1 \
   --harness /path/to/BasiliskIIUAECPUIntegrationHarness \
-  --min-passed 17797 --summary-json /tmp/m68000-summary.json
+  --min-passed 18116 --summary-json /tmp/m68000-summary.json
 ```
 
 The reproducible expansion command is:
