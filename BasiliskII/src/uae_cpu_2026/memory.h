@@ -136,6 +136,16 @@ static __inline__ void trace_write_log(const char *kind, uaecptr addr, uae_u32 v
 extern uae_u8 *fast_ram_base;
 extern uae_u32 fast_ram_size;
 
+static __inline__ uaecptr memory_bus_address(uaecptr addr)
+{
+    static int address_space_24 = -1;
+    if (address_space_24 < 0) {
+        const char *enabled = getenv("B2_TEST_24BIT_ADDRESS");
+        address_space_24 = enabled && enabled[0] == '1' ? 1 : 0;
+    }
+    return address_space_24 ? (addr & 0x00ffffffu) : addr;
+}
+
 static __inline__ bool fast_ram_contains(uaecptr addr, size_t size)
 {
     return fast_ram_base != NULL && addr <= fast_ram_size &&
@@ -144,6 +154,7 @@ static __inline__ bool fast_ram_contains(uaecptr addr, size_t size)
 
 static __inline__ uae_u32 slow_get_long(uaecptr addr)
 {
+    addr = memory_bus_address(addr);
     uae_u32 raw;
     memcpy(&raw, (const uae_u8 *)MEMBaseDiff + addr, sizeof(raw));
     return __builtin_bswap32(raw);
@@ -151,6 +162,7 @@ static __inline__ uae_u32 slow_get_long(uaecptr addr)
 
 static __inline__ uae_u32 slow_get_word(uaecptr addr)
 {
+    addr = memory_bus_address(addr);
     uae_u16 raw;
     memcpy(&raw, (const uae_u8 *)MEMBaseDiff + addr, sizeof(raw));
     return __builtin_bswap16(raw);
@@ -158,12 +170,14 @@ static __inline__ uae_u32 slow_get_word(uaecptr addr)
 
 static __inline__ void slow_put_long(uaecptr addr, uae_u32 value)
 {
+    addr = memory_bus_address(addr);
     const uae_u32 raw = __builtin_bswap32(value);
     memcpy((uae_u8 *)MEMBaseDiff + addr, &raw, sizeof(raw));
 }
 
 static __inline__ void fast_put_word(uaecptr addr, uae_u32 value)
 {
+    addr = memory_bus_address(addr);
     if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u16)), 1)) {
         const uae_u16 raw = __builtin_bswap16((uae_u16)value);
         memcpy(fast_ram_base + addr, &raw, sizeof(raw));
@@ -175,6 +189,7 @@ static __inline__ void fast_put_word(uaecptr addr, uae_u32 value)
 
 static __inline__ uae_u32 fast_get_long(uaecptr addr)
 {
+    addr = memory_bus_address(addr);
     if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u32)), 1)) {
         uae_u32 raw;
         memcpy(&raw, fast_ram_base + addr, sizeof(raw));
@@ -185,6 +200,7 @@ static __inline__ uae_u32 fast_get_long(uaecptr addr)
 
 static __inline__ uae_u32 fast_get_word(uaecptr addr)
 {
+    addr = memory_bus_address(addr);
     if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u16)), 1)) {
         uae_u16 raw;
         memcpy(&raw, fast_ram_base + addr, sizeof(raw));
@@ -195,6 +211,7 @@ static __inline__ uae_u32 fast_get_word(uaecptr addr)
 
 static __inline__ void fast_put_long(uaecptr addr, uae_u32 value)
 {
+    addr = memory_bus_address(addr);
     if (__builtin_expect(fast_ram_contains(addr, sizeof(uae_u32)), 1)) {
         const uae_u32 raw = __builtin_bswap32(value);
         memcpy(fast_ram_base + addr, &raw, sizeof(raw));
@@ -225,15 +242,6 @@ static __inline__ void fast_memory_selftest(void)
         ok ? "passed" : "FAILED");
 }
 
-static __inline__ uaecptr memory_bus_address(uaecptr addr)
-{
-    static int address_space_24 = -1;
-    if (address_space_24 < 0) {
-        const char *enabled = getenv("B2_TEST_24BIT_ADDRESS");
-        address_space_24 = enabled && enabled[0] == '1' ? 1 : 0;
-    }
-    return address_space_24 ? (addr & 0x00ffffffu) : addr;
-}
 static __inline__ uae_u8 *do_get_real_address(uaecptr addr)
 {
 	return (uae_u8 *)MEMBaseDiff + memory_bus_address(addr);
