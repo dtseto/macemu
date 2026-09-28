@@ -154,10 +154,12 @@ population.
 
 The complete available files for these decoded SingleStepTests families have
 now been validated: `NOP.json`, `SWAP.json`, `EXT.w.json`, `EXT.l.json`,
-`AND.b.json`, `OR.b.json`, `SUB.b.json`, `ADD.b.json`, and `CLR.b.json`.
-The 22,500-vector run passes all 17,797 supported vectors through interpreter/
-JIT differential comparison, with 4,703 explicit fixture-boundary or corpus-
-metadata skips and no malformed records. The full corpus run uses
+`AND.b.json`, `OR.b.json`, `EOR.b.json`, `SUB.b.json`, `ADD.b.json`, and
+`CLR.b.json`. The 25,000-vector run passes all 19,405 non-adapted supported
+vectors through interpreter/JIT differential comparison, with 5,595 explicit
+fixture-boundary or corpus-metadata skips and no malformed records. The full
+automated run adapts the indexed CLR.b vectors for the 68020 fixture and
+passes 19,724 supported vectors with 5,276 skips. The full corpus run uses
 `B2_TEST_24BIT_ADDRESS=1`; this is required because the 68000 vectors model a
 24-bit bus and effective addresses may alias across the 16 MiB boundary.
 The memory fixture now applies that bus mask consistently to direct memory
@@ -190,9 +192,9 @@ python3 run_m68000_corpus_regression.py \
 
 The runner defaults to four concurrent family processes and preserves stable
 family-order reporting. Because it adapts CLR.b indexed vectors for the
-68020 model, its complete automated run produces 18,116 supported passes,
-4,384 explicit skips, and zero malformed vectors. The non-adapted family
-aggregate remains 17,797 passes and 4,703 skips.
+68020 model, its complete automated run produces 19,724 supported passes,
+5,276 explicit skips, and zero malformed vectors. The non-adapted family
+aggregate remains 19,405 passes and 5,595 skips.
 
 For CI-style gating, `--min-passed` enforces an aggregate supported-pass
 floor and `--summary-json` writes machine-readable totals plus per-family
@@ -205,7 +207,7 @@ family without invalidating an older baseline:
 python3 run_m68000_corpus_regression.py \
   --corpus-root /path/to/m68000/v1 \
   --harness /path/to/BasiliskIIUAECPUIntegrationHarness \
-  --min-passed 18116 --summary-json /tmp/m68000-summary.json \
+  --min-passed 19724 --summary-json /tmp/m68000-summary.json \
   --baseline-json /tmp/previous-m68000-summary.json
 ```
 
