@@ -15,8 +15,8 @@ from pathlib import Path
 
 
 FAMILIES = (
-    "NOP", "SWAP", "EXT.w", "EXT.l", "AND.b", "OR.b", "EOR.b",
-    "SUB.b", "ADD.b", "CLR.b",
+    "NOP", "SWAP", "EXT.w", "EXT.l", "AND.b", "AND.w", "OR.b",
+    "EOR.b", "SUB.b", "ADD.b", "CLR.b",
 )
 RESULT = re.compile(
     r"UAE_CPU_CORPUS_RESULT total=(\d+) passed=(\d+) skipped=(\d+) "
